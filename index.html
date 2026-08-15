@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>S? thu ti?n</title>
+<title>Sổ thu tiền</title>
 <style>
   :root{
     --paper:#F7F5EF;
@@ -246,15 +246,15 @@
 <body>
 
 <header>
-  <p class="eyebrow">C� nh�n � luu tr�n m�y n�y</p>
-  <h1>S? thu ti?n</h1>
+  <p class="eyebrow">Cá nhân · lưu trên máy này</p>
+  <h1>Sổ thu tiền</h1>
 </header>
 
 <div class="total-card">
-  <div class="label" id="totalLabel">T?ng d� nh?n</div>
-  <div class="amount mono" id="totalAmount">0 ?</div>
+  <div class="label" id="totalLabel">Tổng đã nhận</div>
+  <div class="amount mono" id="totalAmount">0 ₫</div>
   <div class="sub">
-    <span id="countLabel">0 giao d?ch</span>
+    <span id="countLabel">0 giao dịch</span>
     <span id="rangeLabel"></span>
   </div>
 </div>
@@ -263,30 +263,30 @@
 
 <div class="list" id="list"></div>
 
-<button class="fab" id="addBtn" aria-label="Th�m giao d?ch">+</button>
+<button class="fab" id="addBtn" aria-label="Thêm giao dịch">+</button>
 
 <div class="sheet-backdrop" id="backdrop"></div>
 <div class="sheet" id="sheet">
-  <h2 id="sheetTitle">Th�m giao d?ch</h2>
+  <h2 id="sheetTitle">Thêm giao dịch</h2>
   <div class="field">
-    <label for="fName">Ngu?i chuy?n</label>
-    <input type="text" id="fName" placeholder="VD: Nguy?n Van A" autocomplete="off">
+    <label for="fName">Người chuyển</label>
+    <input type="text" id="fName" placeholder="VD: Nguyễn Văn A" autocomplete="off">
   </div>
   <div class="field">
-    <label for="fAmount">S? ti?n (VND)</label>
+    <label for="fAmount">Số tiền (VND)</label>
     <input type="number" id="fAmount" placeholder="VD: 500000" inputmode="numeric">
   </div>
   <div class="field">
-    <label for="fDate">Ng�y giao d?ch</label>
+    <label for="fDate">Ngày giao dịch</label>
     <input type="date" id="fDate">
   </div>
   <div class="field">
-    <label for="fNote">Ghi ch� (kh�ng b?t bu?c)</label>
-    <input type="text" id="fNote" placeholder="VD: ti?n h�ng, n?i dung CK..." autocomplete="off">
+    <label for="fNote">Ghi chú (không bắt buộc)</label>
+    <input type="text" id="fNote" placeholder="VD: tiền hàng, nội dung CK..." autocomplete="off">
   </div>
   <div class="sheet-actions">
-    <button class="btn btn-ghost" id="cancelBtn">H?y</button>
-    <button class="btn btn-primary" id="saveBtn">Luu</button>
+    <button class="btn btn-ghost" id="cancelBtn">Hủy</button>
+    <button class="btn btn-primary" id="saveBtn">Lưu</button>
   </div>
 </div>
 
@@ -298,8 +298,8 @@ let items = [];
 let editingId = null;
 let activeFilter = 'all';
 
-// Luu tr?c ti?p tr�n tr�nh duy?t c?a m�y (localStorage) d? d�ng d?c l?p,
-// kh�ng c?n m? qua Claude m?i l?n.
+// Lưu trực tiếp trên trình duyệt của máy (localStorage) để dùng độc lập,
+// không cần mở qua Claude mỗi lần.
 const storage = {
   get(){
     try{
@@ -333,7 +333,7 @@ function monthKey(iso){
   return iso.slice(0,7); // YYYY-MM
 }
 function monthLabel(key){
-  if(key === 'khac') return 'Kh�c';
+  if(key === 'khac') return 'Khác';
   const [y,m] = key.split('-');
   return `Th ${parseInt(m,10)}/${y}`;
 }
@@ -357,12 +357,12 @@ async function loadItems(){
 }
 async function saveItems(){
   const ok = storage.set(items);
-  if(!ok) showToast('Kh�ng luu du?c, th? l?i nh�');
+  if(!ok) showToast('Không lưu được, thử lại nhé');
 }
 
 function openSheet(edit){
   editingId = null;
-  document.getElementById('sheetTitle').textContent = 'Th�m giao d?ch';
+  document.getElementById('sheetTitle').textContent = 'Thêm giao dịch';
   document.getElementById('fName').value = '';
   document.getElementById('fAmount').value = '';
   document.getElementById('fDate').value = todayISO();
@@ -370,7 +370,7 @@ function openSheet(edit){
 
   if(edit){
     editingId = edit.id;
-    document.getElementById('sheetTitle').textContent = 'S?a giao d?ch';
+    document.getElementById('sheetTitle').textContent = 'Sửa giao dịch';
     document.getElementById('fName').value = edit.name;
     document.getElementById('fAmount').value = edit.amount;
     document.getElementById('fDate').value = edit.date;
@@ -391,8 +391,8 @@ async function handleSave(){
   const date = document.getElementById('fDate').value || todayISO();
   const note = document.getElementById('fNote').value.trim();
 
-  if(!name){ showToast('Nh?p t�n ngu?i chuy?n'); return; }
-  if(!amount || amount <= 0){ showToast('Nh?p s? ti?n h?p l?'); return; }
+  if(!name){ showToast('Nhập tên người chuyển'); return; }
+  if(!amount || amount <= 0){ showToast('Nhập số tiền hợp lệ'); return; }
 
   if(editingId){
     const idx = items.findIndex(i => i.id === editingId);
@@ -408,14 +408,14 @@ async function handleSave(){
   await saveItems();
   closeSheet();
   render();
-  showToast('D� luu');
+  showToast('Đã lưu');
 }
 
 async function handleDelete(id){
   items = items.filter(i => i.id !== id);
   await saveItems();
   render();
-  showToast('D� x�a');
+  showToast('Đã xóa');
 }
 
 function render(){
@@ -426,7 +426,7 @@ function render(){
   filterRow.innerHTML = '';
   const allChip = document.createElement('button');
   allChip.className = 'chip' + (activeFilter === 'all' ? ' active' : '');
-  allChip.textContent = 'T?t c?';
+  allChip.textContent = 'Tất cả';
   allChip.onclick = () => { activeFilter = 'all'; render(); };
   filterRow.appendChild(allChip);
   months.forEach(mk => {
@@ -443,15 +443,15 @@ function render(){
 
   const total = filtered.reduce((s,i) => s + (i.amount || 0), 0);
   document.getElementById('totalAmount').textContent = fmtVND(total);
-  document.getElementById('countLabel').textContent = `${filtered.length} giao d?ch`;
-  document.getElementById('totalLabel').textContent = activeFilter === 'all' ? 'T?ng d� nh?n' : `T?ng ${monthLabel(activeFilter)}`;
+  document.getElementById('countLabel').textContent = `${filtered.length} giao dịch`;
+  document.getElementById('totalLabel').textContent = activeFilter === 'all' ? 'Tổng đã nhận' : `Tổng ${monthLabel(activeFilter)}`;
 
   const list = document.getElementById('list');
   list.innerHTML = '';
   if(filtered.length === 0){
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'Chua c� giao d?ch n�o. B?m n�t + d? th�m.';
+    empty.textContent = 'Chưa có giao dịch nào. Bấm nút + để thêm.';
     list.appendChild(empty);
     return;
   }
@@ -462,10 +462,10 @@ function render(){
       <div class="dot">${initials(item.name)}</div>
       <div class="info">
         <div class="name">${escapeHtml(item.name)}</div>
-        <div class="meta">${fmtDateShort(item.date)}${item.note ? ' � ' + escapeHtml(item.note) : ''}</div>
+        <div class="meta">${fmtDateShort(item.date)}${item.note ? ' · ' + escapeHtml(item.note) : ''}</div>
       </div>
       <div class="amt mono">${fmtVND(item.amount)}</div>
-      <button class="del" aria-label="X�a">?</button>
+      <button class="del" aria-label="Xóa">✕</button>
     `;
     row.querySelector('.info').addEventListener('click', () => openSheet(item));
     row.querySelector('.dot').addEventListener('click', () => openSheet(item));
