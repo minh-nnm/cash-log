@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Sổ thu tiền</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2F9E6E">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sổ thu tiền">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
   :root{
     --paper:#F7F5EF;
@@ -23,6 +31,13 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     min-height:100vh;
     padding-bottom:40px;
+    transition:background .2s ease;
+  }
+  body.book-luong{
+    --paper:#EDF2FA;
+    --accent:#2F6EA6;
+    --accent-dim:#DCE7F5;
+    --ink:#132840;
   }
   .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; font-variant-numeric: tabular-nums;}
 
@@ -49,9 +64,70 @@
     font-size:22px;
     font-weight:700;
   }
+  .header-icon-btn{
+    position:absolute;
+    right:20px; top:24px;
+    width:36px; height:36px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+
+  .menu-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    width:100%;
+    padding:14px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink);
+    font-size:14px;
+    font-weight:600;
+    text-align:left;
+    margin-bottom:10px;
+    cursor:pointer;
+  }
+  .menu-row svg{flex:none; color:var(--accent);}
+  .menu-row .menu-sub{
+    display:block;
+    font-size:12px;
+    font-weight:400;
+    color:var(--muted);
+    margin-top:2px;
+  }
+
+  .book-tabs{
+    display:flex;
+    gap:4px;
+    margin:20px 20px 0;
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:4px;
+  }
+  .book-tab{
+    flex:1;
+    border:none;
+    background:transparent;
+    padding:10px;
+    border-radius:9px;
+    font-size:14px;
+    font-weight:600;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .book-tab.active{
+    background:var(--accent);
+    color:var(--white);
+  }
 
   .total-card{
-    margin:20px 20px 0;
+    margin:16px 20px 0;
     background:var(--ink);
     color:var(--paper);
     border-radius:18px;
@@ -101,6 +177,47 @@
     border-color:var(--accent);
     color:var(--white);
     font-weight:600;
+  }
+  .chip.search-toggle{
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+
+  .range-bar{
+    display:none;
+    align-items:center;
+    gap:8px;
+    margin:10px 20px 0;
+    flex-wrap:wrap;
+  }
+  .range-bar.open{display:flex;}
+  .range-bar input[type=date]{
+    flex:1;
+    min-width:130px;
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--white);
+    font-size:13px;
+    color:var(--ink);
+  }
+  .range-bar .sep{color:var(--muted); font-size:13px; flex:none;}
+  .range-btn{
+    flex:none;
+    padding:8px 14px;
+    border-radius:10px;
+    border:none;
+    background:var(--accent);
+    color:var(--white);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .range-btn-ghost{
+    background:var(--white);
+    color:var(--ink);
+    border:1px solid var(--line);
   }
 
   .list{
@@ -166,6 +283,25 @@
     z-index:20;
   }
   .fab:active{transform:scale(.94);}
+
+  .fab-scan{
+    position:fixed;
+    right:20px; bottom:90px;
+    width:58px; height:58px;
+    padding:0;
+    border-radius:50%;
+    background:var(--accent);
+    color:var(--white);
+    border:none;
+    font-size:24px;
+    line-height:1;
+    box-shadow:0 8px 20px rgba(47,158,110,.35);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    z-index:20;
+  }
+  .fab-scan:active{transform:scale(.94);}
+  .fab-scan.loading{opacity:.55; pointer-events:none;}
 
   .sheet-backdrop{
     position:fixed; inset:0;
@@ -248,7 +384,15 @@
 <header>
   <p class="eyebrow">Cá nhân · lưu trên máy này</p>
   <h1>Sổ thu tiền</h1>
+  <button class="header-icon-btn" id="settingsBtn" aria-label="Sao lưu dữ liệu">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+  </button>
 </header>
+
+<div class="book-tabs" id="bookTabs">
+  <button class="book-tab active" data-book="thu">Thu tiền</button>
+  <button class="book-tab" data-book="luong">Lương</button>
+</div>
 
 <div class="total-card">
   <div class="label" id="totalLabel">Tổng đã nhận</div>
@@ -261,8 +405,20 @@
 
 <div class="filter-row" id="filterRow"></div>
 
+<div class="range-bar" id="rangeBar">
+  <input type="date" id="rangeFrom" aria-label="Từ ngày">
+  <span class="sep">đến</span>
+  <input type="date" id="rangeTo" aria-label="Đến ngày">
+  <button class="range-btn" id="rangeApply">Lọc</button>
+  <button class="range-btn range-btn-ghost" id="rangeClear">Xóa</button>
+</div>
+
 <div class="list" id="list"></div>
 
+<input type="file" id="scanInput" accept="image/*" style="display:none">
+<button class="fab-scan" id="scanBtn" aria-label="Quét ảnh giao dịch">
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+</button>
 <button class="fab" id="addBtn" aria-label="Thêm giao dịch">+</button>
 
 <div class="sheet-backdrop" id="backdrop"></div>
@@ -290,26 +446,81 @@
   </div>
 </div>
 
+<div class="sheet-backdrop" id="settingsBackdrop"></div>
+<div class="sheet" id="settingsSheet">
+  <h2>Sao lưu dữ liệu</h2>
+  <button class="menu-row" id="exportBtn">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+    <span>
+      Xuất dữ liệu ra Excel
+      <span class="menu-sub">Lưu cả 2 sổ thành 1 file .csv, mở trực tiếp bằng Excel</span>
+    </span>
+  </button>
+  <button class="menu-row" id="importBtn">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+    <span>
+      Nhập dữ liệu từ Excel
+      <span class="menu-sub">Khôi phục từ file .csv đã xuất trước đó</span>
+    </span>
+  </button>
+  <input type="file" id="importInput" accept=".csv,text/csv" style="display:none">
+  <button class="btn btn-ghost" id="settingsCloseBtn" style="width:100%;">Đóng</button>
+</div>
+
+<div class="sheet-backdrop" id="confirmBackdrop"></div>
+<div class="sheet" id="confirmSheet">
+  <h2>Xác nhận</h2>
+  <p id="confirmMsg" style="color:var(--muted); font-size:14px; line-height:1.6; margin:0 0 16px;"></p>
+  <div class="sheet-actions">
+    <button class="btn btn-ghost" id="confirmCancelBtn">Hủy</button>
+    <button class="btn btn-primary" id="confirmOkBtn">Đồng ý</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
-const KEY = 'so-thu-tien-transactions';
+const BOOKS = {
+  thu: {
+    key: 'so-thu-tien-transactions',
+    totalLabel: 'Tổng đã nhận',
+    addTitle: 'Thêm giao dịch',
+    editTitle: 'Sửa giao dịch',
+    emptyText: 'Chưa có giao dịch nào. Bấm nút + để thêm.',
+    nameLabel: 'Người chuyển',
+    namePlaceholder: 'VD: Nguyễn Văn A',
+  },
+  luong: {
+    key: 'so-luong-transactions',
+    totalLabel: 'Tổng lương đã nhận',
+    addTitle: 'Thêm lương',
+    editTitle: 'Sửa lương',
+    emptyText: 'Chưa có khoản lương nào. Bấm nút + để thêm.',
+    nameLabel: 'Nơi trả lương',
+    namePlaceholder: 'VD: Công ty ABC',
+  },
+};
+const ACTIVE_BOOK_KEY = 'so-thu-tien-active-book';
+let currentBook = (localStorage.getItem(ACTIVE_BOOK_KEY) in BOOKS) ? localStorage.getItem(ACTIVE_BOOK_KEY) : 'thu';
 let items = [];
 let editingId = null;
 let activeFilter = 'all';
+let dateRange = null; // { from, to } khi lọc theo khoảng ngày
 
 // Lưu trực tiếp trên trình duyệt của máy (localStorage) để dùng độc lập,
-// không cần mở qua Claude mỗi lần.
+// không cần mở qua Claude mỗi lần. Mỗi sổ (thu tiền / lương) có key riêng
+// nên dữ liệu không lẫn vào nhau.
 const storage = {
   get(){
     try{
-      const raw = localStorage.getItem(KEY);
+      const raw = localStorage.getItem(BOOKS[currentBook].key);
       return raw ? JSON.parse(raw) : [];
     }catch(e){ return []; }
   },
   set(data){
     try{
-      localStorage.setItem(KEY, JSON.stringify(data));
+      localStorage.setItem(BOOKS[currentBook].key, JSON.stringify(data));
       return true;
     }catch(e){ return false; }
   }
@@ -351,6 +562,217 @@ function showToast(msg){
   showToast._t = setTimeout(() => t.classList.remove('show'), 1800);
 }
 
+let confirmResolve = null;
+function showConfirm(msg){
+  return new Promise(resolve => {
+    confirmResolve = resolve;
+    document.getElementById('confirmMsg').textContent = msg;
+    document.getElementById('confirmBackdrop').classList.add('open');
+    document.getElementById('confirmSheet').classList.add('open');
+  });
+}
+function closeConfirm(result){
+  document.getElementById('confirmBackdrop').classList.remove('open');
+  document.getElementById('confirmSheet').classList.remove('open');
+  if(confirmResolve) confirmResolve(result);
+  confirmResolve = null;
+}
+
+function openSettings(){
+  document.getElementById('settingsBackdrop').classList.add('open');
+  document.getElementById('settingsSheet').classList.add('open');
+}
+function closeSettings(){
+  document.getElementById('settingsBackdrop').classList.remove('open');
+  document.getElementById('settingsSheet').classList.remove('open');
+}
+
+function csvEscape(val){
+  const s = String(val ?? '');
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field = '';
+        rows.push(row); row = [];
+      } else field += c;
+    }
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.length > 1 || r[0] !== '');
+}
+
+function parseDateShortToISO(s){
+  const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return '';
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+}
+
+function handleExport(){
+  const rows = [['Loại', 'Tên/Nơi', 'Số tiền', 'Ngày giao dịch', 'Ghi chú']];
+  const thu = JSON.parse(localStorage.getItem(BOOKS.thu.key) || '[]');
+  const luong = JSON.parse(localStorage.getItem(BOOKS.luong.key) || '[]');
+  thu.forEach(i => rows.push(['Thu tiền', i.name, i.amount, fmtDateShort(i.date), i.note || '']));
+  luong.forEach(i => rows.push(['Lương', i.name, i.amount, fmtDateShort(i.date), i.note || '']));
+  const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `so-thu-tien-${todayISO()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Đã tải file Excel (.csv)');
+}
+
+async function handleImportFile(file){
+  if(!file) return;
+  let rows;
+  try{
+    let text = await file.text();
+    if(text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    rows = parseCSV(text);
+  }catch(err){
+    showToast('Không đọc được file, kiểm tra lại nhé');
+    return;
+  }
+  if(rows.length < 2){
+    showToast('File không có dữ liệu hợp lệ');
+    return;
+  }
+  const thu = [], luong = [];
+  rows.slice(1).forEach((r, idx) => {
+    const [loai, ten, soTien, ngay, ghiChu] = r;
+    const amount = parseFloat(String(soTien).replace(/[^\d.-]/g, ''));
+    const date = parseDateShortToISO(ngay);
+    if(!ten || !amount || !date) return;
+    const item = {
+      id: 'tx_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
+      name: ten, amount, date, note: ghiChu || '',
+    };
+    if((loai || '').trim() === 'Lương') luong.push(item);
+    else thu.push(item);
+  });
+  if(!thu.length && !luong.length){
+    showToast('Không tìm thấy dòng dữ liệu hợp lệ trong file');
+    return;
+  }
+  const ok = await showConfirm(`Tìm thấy ${thu.length} dòng Thu tiền và ${luong.length} dòng Lương. Nhập sẽ GHI ĐÈ dữ liệu hiện tại. Tiếp tục?`);
+  if(!ok) return;
+  localStorage.setItem(BOOKS.thu.key, JSON.stringify(thu));
+  localStorage.setItem(BOOKS.luong.key, JSON.stringify(luong));
+  loadItems();
+  showToast('Đã nhập dữ liệu thành công');
+}
+
+function stripDiacritics(str){
+  return str.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D');
+}
+
+function parseTransactionText(rawText){
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+  const norm = lines.map(l => stripDiacritics(l).toLowerCase());
+
+  const findValueForLabel = (labelKeywords, sameLineRegex) => {
+    for(let i=0;i<lines.length;i++){
+      if(labelKeywords.some(k => norm[i].includes(k))){
+        let m = lines[i].match(sameLineRegex);
+        if(m) return m;
+        for(let j=i+1;j<Math.min(i+3,lines.length);j++){
+          m = lines[j].match(sameLineRegex);
+          if(m) return m;
+        }
+      }
+    }
+    return null;
+  };
+
+  let date = '';
+  const dateM = findValueForLabel(['ngay giao dich','ngay gd'], /(\d{2})\/(\d{2})\/(\d{4})/)
+             || rawText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if(dateM) date = `${dateM[3]}-${dateM[2]}-${dateM[1]}`;
+
+  let amount = null;
+  const amtM = findValueForLabel(['so tien','thanh toan'], /(\d{1,3}(?:[.,]\d{3})+)/)
+            || rawText.match(/(\d{1,3}(?:[.,]\d{3})+)/);
+  if(amtM) amount = parseInt(amtM[1].replace(/[.,]/g,''), 10);
+
+  let note = '';
+  let name = '';
+  const contentIdx = norm.findIndex(l => l.includes('noi dung'));
+  if(contentIdx !== -1){
+    const firstLine = lines[contentIdx].replace(/^.*?d[ịi]ch\s*/i, '').trim();
+    note = [firstLine, ...lines.slice(contentIdx+1)].join(' ').replace(/\s+/g,' ').trim();
+  }
+  const nameM = note.match(/^([A-Za-zÀ-Ỹà-ỹ\s]{4,40}?)\s+chuy[eể]n\s*(ti[eề]n|kho[aả]n)/i);
+  if(nameM){
+    name = nameM[1].trim().split(/\s+/).map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+  }
+
+  return { date, amount, name, note };
+}
+
+async function handleScanImage(file){
+  if(!file) return;
+  const scanBtn = document.getElementById('scanBtn');
+  scanBtn.classList.add('loading');
+  showToast('Đang đọc ảnh giao dịch...');
+  try{
+    const { data: { text } } = await Tesseract.recognize(file, 'vie+eng');
+    const parsed = parseTransactionText(text);
+    openSheet(null);
+    document.getElementById('sheetTitle').textContent = 'Xác nhận giao dịch (từ ảnh)';
+    if(parsed.name) document.getElementById('fName').value = parsed.name;
+    if(parsed.amount) document.getElementById('fAmount').value = parsed.amount;
+    if(parsed.date) document.getElementById('fDate').value = parsed.date;
+    if(parsed.note) document.getElementById('fNote').value = parsed.note;
+    showToast('Đã đọc xong, kiểm tra lại rồi lưu nhé');
+  }catch(err){
+    showToast('Không đọc được ảnh, thử ảnh rõ hơn');
+  }finally{
+    scanBtn.classList.remove('loading');
+  }
+}
+
+function updateBookLabels(){
+  const cfg = BOOKS[currentBook];
+  document.querySelector('label[for="fName"]').textContent = cfg.nameLabel;
+  document.getElementById('fName').placeholder = cfg.namePlaceholder;
+}
+
+function switchBook(book){
+  if(book === currentBook || !(book in BOOKS)) return;
+  currentBook = book;
+  localStorage.setItem(ACTIVE_BOOK_KEY, book);
+  activeFilter = 'all';
+  dateRange = null;
+  document.getElementById('rangeFrom').value = '';
+  document.getElementById('rangeTo').value = '';
+  document.getElementById('rangeBar').classList.remove('open');
+  document.querySelectorAll('.book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === book));
+  document.body.classList.toggle('book-luong', book === 'luong');
+  updateBookLabels();
+  loadItems();
+}
+
 async function loadItems(){
   items = storage.get();
   render();
@@ -361,8 +783,9 @@ async function saveItems(){
 }
 
 function openSheet(edit){
+  const cfg = BOOKS[currentBook];
   editingId = null;
-  document.getElementById('sheetTitle').textContent = 'Thêm giao dịch';
+  document.getElementById('sheetTitle').textContent = cfg.addTitle;
   document.getElementById('fName').value = '';
   document.getElementById('fAmount').value = '';
   document.getElementById('fDate').value = todayISO();
@@ -370,7 +793,7 @@ function openSheet(edit){
 
   if(edit){
     editingId = edit.id;
-    document.getElementById('sheetTitle').textContent = 'Sửa giao dịch';
+    document.getElementById('sheetTitle').textContent = cfg.editTitle;
     document.getElementById('fName').value = edit.name;
     document.getElementById('fAmount').value = edit.amount;
     document.getElementById('fDate').value = edit.date;
@@ -386,12 +809,13 @@ function closeSheet(){
 }
 
 async function handleSave(){
+  const cfg = BOOKS[currentBook];
   const name = document.getElementById('fName').value.trim();
   const amount = parseFloat(document.getElementById('fAmount').value);
   const date = document.getElementById('fDate').value || todayISO();
   const note = document.getElementById('fNote').value.trim();
 
-  if(!name){ showToast('Nhập tên người chuyển'); return; }
+  if(!name){ showToast(`Nhập ${cfg.nameLabel.toLowerCase()}`); return; }
   if(!amount || amount <= 0){ showToast('Nhập số tiền hợp lệ'); return; }
 
   if(editingId){
@@ -427,31 +851,47 @@ function render(){
   const allChip = document.createElement('button');
   allChip.className = 'chip' + (activeFilter === 'all' ? ' active' : '');
   allChip.textContent = 'Tất cả';
-  allChip.onclick = () => { activeFilter = 'all'; render(); };
+  allChip.onclick = () => { activeFilter = 'all'; document.getElementById('rangeBar').classList.remove('open'); render(); };
   filterRow.appendChild(allChip);
   months.forEach(mk => {
     const chip = document.createElement('button');
     chip.className = 'chip' + (activeFilter === mk ? ' active' : '');
     chip.textContent = monthLabel(mk);
-    chip.onclick = () => { activeFilter = mk; render(); };
+    chip.onclick = () => { activeFilter = mk; document.getElementById('rangeBar').classList.remove('open'); render(); };
     filterRow.appendChild(chip);
   });
+  const searchChip = document.createElement('button');
+  searchChip.className = 'chip search-toggle' + (activeFilter === 'range' ? ' active' : '');
+  searchChip.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>Tìm theo ngày</span>';
+  searchChip.onclick = () => document.getElementById('rangeBar').classList.toggle('open');
+  filterRow.appendChild(searchChip);
 
-  const filtered = (activeFilter === 'all' ? items : items.filter(i => monthKey(i.date) === activeFilter))
-    .slice()
+  let filtered;
+  if(activeFilter === 'range' && dateRange){
+    filtered = items.filter(i => i.date && i.date >= dateRange.from && i.date <= dateRange.to);
+  } else {
+    filtered = activeFilter === 'all' ? items : items.filter(i => monthKey(i.date) === activeFilter);
+  }
+  filtered = filtered.slice()
     .sort((a,b) => (b.date || '').localeCompare(a.date || '') || b.id.localeCompare(a.id));
 
   const total = filtered.reduce((s,i) => s + (i.amount || 0), 0);
   document.getElementById('totalAmount').textContent = fmtVND(total);
   document.getElementById('countLabel').textContent = `${filtered.length} giao dịch`;
-  document.getElementById('totalLabel').textContent = activeFilter === 'all' ? 'Tổng đã nhận' : `Tổng ${monthLabel(activeFilter)}`;
+  let totalLabelText = BOOKS[currentBook].totalLabel;
+  if(activeFilter === 'range' && dateRange){
+    totalLabelText = `Tổng ${fmtDateShort(dateRange.from)} - ${fmtDateShort(dateRange.to)}`;
+  } else if(activeFilter !== 'all'){
+    totalLabelText = `Tổng ${monthLabel(activeFilter)}`;
+  }
+  document.getElementById('totalLabel').textContent = totalLabelText;
 
   const list = document.getElementById('list');
   list.innerHTML = '';
   if(filtered.length === 0){
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'Chưa có giao dịch nào. Bấm nút + để thêm.';
+    empty.textContent = BOOKS[currentBook].emptyText;
     list.appendChild(empty);
     return;
   }
@@ -488,8 +928,58 @@ document.getElementById('addBtn').addEventListener('click', () => openSheet(null
 document.getElementById('cancelBtn').addEventListener('click', closeSheet);
 document.getElementById('backdrop').addEventListener('click', closeSheet);
 document.getElementById('saveBtn').addEventListener('click', handleSave);
+document.getElementById('scanBtn').addEventListener('click', () => document.getElementById('scanInput').click());
+document.getElementById('scanInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  handleScanImage(file);
+  e.target.value = '';
+});
+document.querySelectorAll('.book-tab').forEach(btn => {
+  btn.addEventListener('click', () => switchBook(btn.dataset.book));
+});
+document.getElementById('rangeApply').addEventListener('click', () => {
+  const from = document.getElementById('rangeFrom').value;
+  const to = document.getElementById('rangeTo').value;
+  if(!from || !to){ showToast('Chọn đủ ngày bắt đầu và kết thúc'); return; }
+  if(from > to){ showToast('Ngày bắt đầu phải trước ngày kết thúc'); return; }
+  dateRange = { from, to };
+  activeFilter = 'range';
+  render();
+  document.getElementById('rangeBar').classList.add('open');
+});
+document.getElementById('rangeClear').addEventListener('click', () => {
+  dateRange = null;
+  document.getElementById('rangeFrom').value = '';
+  document.getElementById('rangeTo').value = '';
+  activeFilter = 'all';
+  document.getElementById('rangeBar').classList.remove('open');
+  render();
+});
+document.getElementById('settingsBtn').addEventListener('click', openSettings);
+document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
+document.getElementById('settingsBackdrop').addEventListener('click', closeSettings);
+document.getElementById('exportBtn').addEventListener('click', () => { handleExport(); closeSettings(); });
+document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importInput').click());
+document.getElementById('importInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  closeSettings();
+  await handleImportFile(file);
+});
+document.getElementById('confirmCancelBtn').addEventListener('click', () => closeConfirm(false));
+document.getElementById('confirmOkBtn').addEventListener('click', () => closeConfirm(true));
+document.getElementById('confirmBackdrop').addEventListener('click', () => closeConfirm(false));
 
+document.querySelectorAll('.book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === currentBook));
+document.body.classList.toggle('book-luong', currentBook === 'luong');
+updateBookLabels();
 loadItems();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
