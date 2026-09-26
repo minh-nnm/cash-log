@@ -1046,8 +1046,17 @@ setFormType('in');
 loadItems();
 
 if('serviceWorker' in navigator){
+  // Khi service worker mới tiếp quản thì tải lại 1 lần để hiện ngay code mới
+  // (chỉ khi đã có SW cũ, lần cài đầu tiên không cần reload)
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   });
 }
 </script>
