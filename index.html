@@ -147,6 +147,7 @@
     font-weight:700;
     letter-spacing:-0.01em;
   }
+  .total-card .amount.neg{color:#F2A07B;}
   .total-card .sub{
     margin-top:10px;
     font-size:13px;
@@ -154,6 +155,9 @@
     display:flex;
     justify-content:space-between;
   }
+
+  .type-tabs{margin:0 0 16px;}
+  .chip-sep{flex:none; width:1px; margin:4px 2px; background:var(--line);}
 
   .filter-row{
     display:flex;
@@ -255,6 +259,8 @@
   .row .name{font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .row .meta{font-size:12.5px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .row .amt{font-weight:700; font-size:15px; flex:none; text-align:right;}
+  .row.out .dot{background:#F6E3D9; color:var(--warn);}
+  .row.out .amt{color:var(--warn);}
   .row .del{
     flex:none;
     width:28px; height:28px;
@@ -398,8 +404,11 @@
   <div class="label" id="totalLabel">Tổng đã nhận</div>
   <div class="amount mono" id="totalAmount">0 ₫</div>
   <div class="sub">
+    <span id="inLabel"></span>
+    <span id="outLabel"></span>
+  </div>
+  <div class="sub">
     <span id="countLabel">0 giao dịch</span>
-    <span id="rangeLabel"></span>
   </div>
 </div>
 
@@ -424,6 +433,10 @@
 <div class="sheet-backdrop" id="backdrop"></div>
 <div class="sheet" id="sheet">
   <h2 id="sheetTitle">Thêm giao dịch</h2>
+  <div class="book-tabs type-tabs" id="typeTabs">
+    <button class="book-tab active" data-type="in">Thu</button>
+    <button class="book-tab" data-type="out">Rút</button>
+  </div>
   <div class="field">
     <label for="fName">Người chuyển</label>
     <input type="text" id="fName" placeholder="VD: Nguyễn Văn A" autocomplete="off">
@@ -484,7 +497,7 @@
 const BOOKS = {
   thu: {
     key: 'so-thu-tien-transactions',
-    totalLabel: 'Tổng đã nhận',
+    totalLabel: 'Số dư',
     addTitle: 'Thêm giao dịch',
     editTitle: 'Sửa giao dịch',
     emptyText: 'Chưa có giao dịch nào. Bấm nút + để thêm.',
@@ -493,7 +506,7 @@ const BOOKS = {
   },
   luong: {
     key: 'so-luong-transactions',
-    totalLabel: 'Tổng lương đã nhận',
+    totalLabel: 'Số dư lương',
     addTitle: 'Thêm lương',
     editTitle: 'Sửa lương',
     emptyText: 'Chưa có khoản lương nào. Bấm nút + để thêm.',
@@ -501,12 +514,29 @@ const BOOKS = {
     namePlaceholder: 'VD: Công ty ABC',
   },
 };
+// Nhãn dùng chung cho khoản rút ở mọi sổ
+const OUT_CFG = {
+  addTitle: 'Thêm khoản rút',
+  editTitle: 'Sửa khoản rút',
+  nameLabel: 'Rút cho / Mục đích',
+  namePlaceholder: 'VD: Trả tiền nhà, rút ATM',
+};
 const ACTIVE_BOOK_KEY = 'so-thu-tien-active-book';
 let currentBook = (localStorage.getItem(ACTIVE_BOOK_KEY) in BOOKS) ? localStorage.getItem(ACTIVE_BOOK_KEY) : 'thu';
 let items = [];
 let editingId = null;
 let activeFilter = 'all';
 let dateRange = null; // { from, to } khi lọc theo khoảng ngày
+let typeFilter = 'all'; // 'all' | 'in' | 'out'
+let formType = 'in';    // kiểu đang chọn trong form thêm/sửa
+
+// Giao dịch cũ không có trường type => coi là tiền vào
+const isOut = i => i.type === 'out';
+function sumAmount(list){ return list.reduce((s,i) => s + (i.amount || 0), 0); }
+function bookBalance(excludeId){
+  const list = items.filter(i => i.id !== excludeId);
+  return sumAmount(list.filter(i => !isOut(i))) - sumAmount(list.filter(isOut));
+}
 
 // Lưu trực tiếp trên trình duyệt của máy (localStorage) để dùng độc lập,
 // không cần mở qua Claude mỗi lần. Mỗi sổ (thu tiền / lương) có key riêng
@@ -625,11 +655,12 @@ function parseDateShortToISO(s){
 }
 
 function handleExport(){
-  const rows = [['Loại', 'Tên/Nơi', 'Số tiền', 'Ngày giao dịch', 'Ghi chú']];
+  const rows = [['Loại', 'Tên/Nơi', 'Số tiền', 'Ngày giao dịch', 'Ghi chú', 'Kiểu']];
   const thu = JSON.parse(localStorage.getItem(BOOKS.thu.key) || '[]');
   const luong = JSON.parse(localStorage.getItem(BOOKS.luong.key) || '[]');
-  thu.forEach(i => rows.push(['Thu tiền', i.name, i.amount, fmtDateShort(i.date), i.note || '']));
-  luong.forEach(i => rows.push(['Lương', i.name, i.amount, fmtDateShort(i.date), i.note || '']));
+  const kieu = i => isOut(i) ? 'Rút' : 'Thu';
+  thu.forEach(i => rows.push(['Thu tiền', i.name, i.amount, fmtDateShort(i.date), i.note || '', kieu(i)]));
+  luong.forEach(i => rows.push(['Lương', i.name, i.amount, fmtDateShort(i.date), i.note || '', kieu(i)]));
   const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -660,13 +691,15 @@ async function handleImportFile(file){
   }
   const thu = [], luong = [];
   rows.slice(1).forEach((r, idx) => {
-    const [loai, ten, soTien, ngay, ghiChu] = r;
+    const [loai, ten, soTien, ngay, ghiChu, kieu] = r;
     const amount = parseFloat(String(soTien).replace(/[^\d.-]/g, ''));
     const date = parseDateShortToISO(ngay);
     if(!ten || !amount || !date) return;
     const item = {
       id: 'tx_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
       name: ten, amount, date, note: ghiChu || '',
+      // File cũ chỉ có 5 cột => thiếu cột Kiểu thì coi là Thu
+      type: (kieu || '').trim() === 'Rút' ? 'out' : 'in',
     };
     if((loai || '').trim() === 'Lương') luong.push(item);
     else thu.push(item);
@@ -727,7 +760,12 @@ function parseTransactionText(rawText){
     name = nameM[1].trim().split(/\s+/).map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
   }
 
-  return { date, amount, name, note };
+  // Chỉ đoán là khoản rút khi có dấu hiệu rõ: dấu trừ trước số tiền hoặc từ khóa ghi nợ/rút tiền
+  const outByKeyword = norm.some(l => l.includes('ghi no') || l.includes('rut tien'));
+  const outBySign = /[-−]\s*\d{1,3}(?:[.,]\d{3})+/.test(rawText);
+  const type = (outByKeyword || outBySign) ? 'out' : 'in';
+
+  return { date, amount, name, note, type };
 }
 
 async function handleScanImage(file){
@@ -738,7 +776,7 @@ async function handleScanImage(file){
   try{
     const { data: { text } } = await Tesseract.recognize(file, 'vie+eng');
     const parsed = parseTransactionText(text);
-    openSheet(null);
+    openSheet(null, parsed.type);
     document.getElementById('sheetTitle').textContent = 'Xác nhận giao dịch (từ ảnh)';
     if(parsed.name) document.getElementById('fName').value = parsed.name;
     if(parsed.amount) document.getElementById('fAmount').value = parsed.amount;
@@ -752,10 +790,13 @@ async function handleScanImage(file){
   }
 }
 
-function updateBookLabels(){
-  const cfg = BOOKS[currentBook];
+function setFormType(type){
+  formType = type === 'out' ? 'out' : 'in';
+  const cfg = formType === 'out' ? OUT_CFG : BOOKS[currentBook];
+  document.querySelectorAll('#typeTabs .book-tab').forEach(b => b.classList.toggle('active', b.dataset.type === formType));
   document.querySelector('label[for="fName"]').textContent = cfg.nameLabel;
   document.getElementById('fName').placeholder = cfg.namePlaceholder;
+  document.getElementById('sheetTitle').textContent = editingId ? cfg.editTitle : cfg.addTitle;
 }
 
 function switchBook(book){
@@ -763,13 +804,13 @@ function switchBook(book){
   currentBook = book;
   localStorage.setItem(ACTIVE_BOOK_KEY, book);
   activeFilter = 'all';
+  typeFilter = 'all';
   dateRange = null;
   document.getElementById('rangeFrom').value = '';
   document.getElementById('rangeTo').value = '';
   document.getElementById('rangeBar').classList.remove('open');
-  document.querySelectorAll('.book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === book));
+  document.querySelectorAll('#bookTabs .book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === book));
   document.body.classList.toggle('book-luong', book === 'luong');
-  updateBookLabels();
   loadItems();
 }
 
@@ -782,10 +823,8 @@ async function saveItems(){
   if(!ok) showToast('Không lưu được, thử lại nhé');
 }
 
-function openSheet(edit){
-  const cfg = BOOKS[currentBook];
+function openSheet(edit, type = 'in'){
   editingId = null;
-  document.getElementById('sheetTitle').textContent = cfg.addTitle;
   document.getElementById('fName').value = '';
   document.getElementById('fAmount').value = '';
   document.getElementById('fDate').value = todayISO();
@@ -793,12 +832,13 @@ function openSheet(edit){
 
   if(edit){
     editingId = edit.id;
-    document.getElementById('sheetTitle').textContent = cfg.editTitle;
+    type = edit.type;
     document.getElementById('fName').value = edit.name;
     document.getElementById('fAmount').value = edit.amount;
     document.getElementById('fDate').value = edit.date;
     document.getElementById('fNote').value = edit.note || '';
   }
+  setFormType(type);
   document.getElementById('backdrop').classList.add('open');
   document.getElementById('sheet').classList.add('open');
   setTimeout(() => document.getElementById('fName').focus(), 200);
@@ -809,7 +849,8 @@ function closeSheet(){
 }
 
 async function handleSave(){
-  const cfg = BOOKS[currentBook];
+  const cfg = formType === 'out' ? OUT_CFG : BOOKS[currentBook];
+  const type = formType;
   const name = document.getElementById('fName').value.trim();
   const amount = parseFloat(document.getElementById('fAmount').value);
   const date = document.getElementById('fDate').value || todayISO();
@@ -817,16 +858,23 @@ async function handleSave(){
 
   if(!name){ showToast(`Nhập ${cfg.nameLabel.toLowerCase()}`); return; }
   if(!amount || amount <= 0){ showToast('Nhập số tiền hợp lệ'); return; }
+  if(type === 'out'){
+    const balance = bookBalance(editingId);
+    if(amount > balance){
+      const ok = await showConfirm(`Số rút (${fmtVND(amount)}) lớn hơn số dư hiện tại (${fmtVND(balance)}). Vẫn lưu?`);
+      if(!ok) return;
+    }
+  }
 
   if(editingId){
     const idx = items.findIndex(i => i.id === editingId);
     if(idx > -1){
-      items[idx] = { ...items[idx], name, amount, date, note };
+      items[idx] = { ...items[idx], name, amount, date, note, type };
     }
   } else {
     items.push({
       id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-      name, amount, date, note
+      name, amount, date, note, type
     });
   }
   await saveItems();
@@ -848,6 +896,16 @@ function render(){
     .sort((a,b) => b.localeCompare(a));
   const filterRow = document.getElementById('filterRow');
   filterRow.innerHTML = '';
+  [['in', 'Thu'], ['out', 'Rút']].forEach(([t, label]) => {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (typeFilter === t ? ' active' : '');
+    chip.textContent = label;
+    chip.onclick = () => { typeFilter = typeFilter === t ? 'all' : t; render(); };
+    filterRow.appendChild(chip);
+  });
+  const sep = document.createElement('span');
+  sep.className = 'chip-sep';
+  filterRow.appendChild(sep);
   const allChip = document.createElement('button');
   allChip.className = 'chip' + (activeFilter === 'all' ? ' active' : '');
   allChip.textContent = 'Tất cả';
@@ -872,17 +930,24 @@ function render(){
   } else {
     filtered = activeFilter === 'all' ? items : items.filter(i => monthKey(i.date) === activeFilter);
   }
+  const tin = sumAmount(filtered.filter(i => !isOut(i)));
+  const tout = sumAmount(filtered.filter(isOut));
+  if(typeFilter !== 'all') filtered = filtered.filter(i => isOut(i) === (typeFilter === 'out'));
   filtered = filtered.slice()
     .sort((a,b) => (b.date || '').localeCompare(a.date || '') || b.id.localeCompare(a.id));
 
-  const total = filtered.reduce((s,i) => s + (i.amount || 0), 0);
-  document.getElementById('totalAmount').textContent = fmtVND(total);
+  const total = typeFilter === 'in' ? tin : typeFilter === 'out' ? tout : tin - tout;
+  const amountEl = document.getElementById('totalAmount');
+  amountEl.textContent = fmtVND(total);
+  amountEl.classList.toggle('neg', total < 0);
+  document.getElementById('inLabel').textContent = `↓ Thu ${fmtVND(tin)}`;
+  document.getElementById('outLabel').textContent = `↑ Rút ${fmtVND(tout)}`;
   document.getElementById('countLabel').textContent = `${filtered.length} giao dịch`;
-  let totalLabelText = BOOKS[currentBook].totalLabel;
+  let totalLabelText = typeFilter === 'in' ? 'Tổng thu' : typeFilter === 'out' ? 'Tổng rút' : BOOKS[currentBook].totalLabel;
   if(activeFilter === 'range' && dateRange){
-    totalLabelText = `Tổng ${fmtDateShort(dateRange.from)} - ${fmtDateShort(dateRange.to)}`;
+    totalLabelText += ` ${fmtDateShort(dateRange.from)} - ${fmtDateShort(dateRange.to)}`;
   } else if(activeFilter !== 'all'){
-    totalLabelText = `Tổng ${monthLabel(activeFilter)}`;
+    totalLabelText += ` ${monthLabel(activeFilter)}`;
   }
   document.getElementById('totalLabel').textContent = totalLabelText;
 
@@ -897,14 +962,15 @@ function render(){
   }
   filtered.forEach(item => {
     const row = document.createElement('div');
-    row.className = 'row';
+    const out = isOut(item);
+    row.className = 'row' + (out ? ' out' : '');
     row.innerHTML = `
-      <div class="dot">${initials(item.name)}</div>
+      <div class="dot">${out ? '↑' : initials(item.name)}</div>
       <div class="info">
         <div class="name">${escapeHtml(item.name)}</div>
         <div class="meta">${fmtDateShort(item.date)}${item.note ? ' · ' + escapeHtml(item.note) : ''}</div>
       </div>
-      <div class="amt mono">${fmtVND(item.amount)}</div>
+      <div class="amt mono">${out ? '−' : ''}${fmtVND(item.amount)}</div>
       <button class="del" aria-label="Xóa">✕</button>
     `;
     row.querySelector('.info').addEventListener('click', () => openSheet(item));
@@ -934,8 +1000,11 @@ document.getElementById('scanInput').addEventListener('change', (e) => {
   handleScanImage(file);
   e.target.value = '';
 });
-document.querySelectorAll('.book-tab').forEach(btn => {
+document.querySelectorAll('#bookTabs .book-tab').forEach(btn => {
   btn.addEventListener('click', () => switchBook(btn.dataset.book));
+});
+document.querySelectorAll('#typeTabs .book-tab').forEach(btn => {
+  btn.addEventListener('click', () => setFormType(btn.dataset.type));
 });
 document.getElementById('rangeApply').addEventListener('click', () => {
   const from = document.getElementById('rangeFrom').value;
@@ -970,9 +1039,9 @@ document.getElementById('confirmCancelBtn').addEventListener('click', () => clos
 document.getElementById('confirmOkBtn').addEventListener('click', () => closeConfirm(true));
 document.getElementById('confirmBackdrop').addEventListener('click', () => closeConfirm(false));
 
-document.querySelectorAll('.book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === currentBook));
+document.querySelectorAll('#bookTabs .book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === currentBook));
 document.body.classList.toggle('book-luong', currentBook === 'luong');
-updateBookLabels();
+setFormType('in');
 loadItems();
 
 if('serviceWorker' in navigator){
