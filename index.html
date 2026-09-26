@@ -990,7 +990,8 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
-document.getElementById('addBtn').addEventListener('click', () => openSheet(null));
+// Đang lọc "Rút" thì mở form ở chế độ rút luôn
+document.getElementById('addBtn').addEventListener('click', () => openSheet(null, typeFilter === 'out' ? 'out' : 'in'));
 document.getElementById('cancelBtn').addEventListener('click', closeSheet);
 document.getElementById('backdrop').addEventListener('click', closeSheet);
 document.getElementById('saveBtn').addEventListener('click', handleSave);
