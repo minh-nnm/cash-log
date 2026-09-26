@@ -39,6 +39,14 @@
     --accent-dim:#DCE7F5;
     --ink:#132840;
   }
+  body.book-tong{
+    --paper:#F3F0F7;
+    --accent:#6B4FA0;
+    --accent-dim:#E6DFF2;
+    --ink:#231A33;
+  }
+  /* Tab Tổng chỉ để xem, thêm giao dịch ở từng sổ */
+  body.book-tong .fab, body.book-tong .fab-scan{display:none;}
   .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; font-variant-numeric: tabular-nums;}
 
   header{
@@ -153,6 +161,8 @@
     font-size:13px;
     opacity:.7;
     display:flex;
+    flex-wrap:wrap;
+    gap:4px 12px;
     justify-content:space-between;
   }
 
@@ -398,6 +408,7 @@
 <div class="book-tabs" id="bookTabs">
   <button class="book-tab active" data-book="thu">Thu tiền</button>
   <button class="book-tab" data-book="luong">Lương</button>
+  <button class="book-tab" data-book="tong">Tổng</button>
 </div>
 
 <div class="total-card">
@@ -496,6 +507,7 @@
 <script>
 const BOOKS = {
   thu: {
+    title: 'Thu tiền',
     key: 'so-thu-tien-transactions',
     totalLabel: 'Số dư',
     addTitle: 'Thêm giao dịch',
@@ -505,6 +517,7 @@ const BOOKS = {
     namePlaceholder: 'VD: Nguyễn Văn A',
   },
   luong: {
+    title: 'Lương',
     key: 'so-luong-transactions',
     totalLabel: 'Số dư lương',
     addTitle: 'Thêm lương',
@@ -521,8 +534,17 @@ const OUT_CFG = {
   nameLabel: 'Rút cho / Mục đích',
   namePlaceholder: 'VD: Trả tiền nhà, rút ATM',
 };
+// Tab "Tổng": gộp cả 2 sổ để xem số dư còn lại, không lưu dữ liệu riêng
+const SUMMARY = 'tong';
+const SUMMARY_CFG = {
+  totalLabel: 'Còn lại',
+  emptyText: 'Chưa có giao dịch nào ở cả 2 sổ.',
+};
+const isSummary = () => currentBook === SUMMARY;
+const viewCfg = () => isSummary() ? SUMMARY_CFG : BOOKS[currentBook];
 const ACTIVE_BOOK_KEY = 'so-thu-tien-active-book';
-let currentBook = (localStorage.getItem(ACTIVE_BOOK_KEY) in BOOKS) ? localStorage.getItem(ACTIVE_BOOK_KEY) : 'thu';
+const savedBook = localStorage.getItem(ACTIVE_BOOK_KEY);
+let currentBook = (savedBook in BOOKS || savedBook === SUMMARY) ? savedBook : 'thu';
 let items = [];
 let editingId = null;
 let activeFilter = 'all';
@@ -543,6 +565,14 @@ function bookBalance(excludeId){
 // nên dữ liệu không lẫn vào nhau.
 const storage = {
   get(){
+    if(isSummary()){
+      // _book chỉ dùng để hiển thị trong tab Tổng, không bao giờ được lưu lại
+      return Object.entries(BOOKS).flatMap(([book, cfg]) => {
+        try{
+          return JSON.parse(localStorage.getItem(cfg.key) || '[]').map(i => ({ ...i, _book: book }));
+        }catch(e){ return []; }
+      });
+    }
     try{
       const raw = localStorage.getItem(BOOKS[currentBook].key);
       return raw ? JSON.parse(raw) : [];
@@ -792,7 +822,7 @@ async function handleScanImage(file){
 
 function setFormType(type){
   formType = type === 'out' ? 'out' : 'in';
-  const cfg = formType === 'out' ? OUT_CFG : BOOKS[currentBook];
+  const cfg = formType === 'out' ? OUT_CFG : (BOOKS[currentBook] || BOOKS.thu);
   document.querySelectorAll('#typeTabs .book-tab').forEach(b => b.classList.toggle('active', b.dataset.type === formType));
   document.querySelector('label[for="fName"]').textContent = cfg.nameLabel;
   document.getElementById('fName').placeholder = cfg.namePlaceholder;
@@ -800,7 +830,7 @@ function setFormType(type){
 }
 
 function switchBook(book){
-  if(book === currentBook || !(book in BOOKS)) return;
+  if(book === currentBook || !(book in BOOKS || book === SUMMARY)) return;
   currentBook = book;
   localStorage.setItem(ACTIVE_BOOK_KEY, book);
   activeFilter = 'all';
@@ -811,6 +841,7 @@ function switchBook(book){
   document.getElementById('rangeBar').classList.remove('open');
   document.querySelectorAll('#bookTabs .book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === book));
   document.body.classList.toggle('book-luong', book === 'luong');
+  document.body.classList.toggle('book-tong', book === SUMMARY);
   loadItems();
 }
 
@@ -940,10 +971,15 @@ function render(){
   const amountEl = document.getElementById('totalAmount');
   amountEl.textContent = fmtVND(total);
   amountEl.classList.toggle('neg', total < 0);
-  document.getElementById('inLabel').textContent = `↓ Thu ${fmtVND(tin)}`;
+  if(isSummary()){
+    const fromBook = b => sumAmount(filtered.filter(i => i._book === b && !isOut(i)));
+    document.getElementById('inLabel').textContent = `↓ Thu tiền ${fmtVND(fromBook('thu'))} · Lương ${fmtVND(fromBook('luong'))}`;
+  } else {
+    document.getElementById('inLabel').textContent = `↓ Thu ${fmtVND(tin)}`;
+  }
   document.getElementById('outLabel').textContent = `↑ Rút ${fmtVND(tout)}`;
   document.getElementById('countLabel').textContent = `${filtered.length} giao dịch`;
-  let totalLabelText = typeFilter === 'in' ? 'Tổng thu' : typeFilter === 'out' ? 'Tổng rút' : BOOKS[currentBook].totalLabel;
+  let totalLabelText = typeFilter === 'in' ? 'Tổng thu' : typeFilter === 'out' ? 'Tổng rút' : viewCfg().totalLabel;
   if(activeFilter === 'range' && dateRange){
     totalLabelText += ` ${fmtDateShort(dateRange.from)} - ${fmtDateShort(dateRange.to)}`;
   } else if(activeFilter !== 'all'){
@@ -956,7 +992,7 @@ function render(){
   if(filtered.length === 0){
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = BOOKS[currentBook].emptyText;
+    empty.textContent = viewCfg().emptyText;
     list.appendChild(empty);
     return;
   }
@@ -968,20 +1004,30 @@ function render(){
       <div class="dot">${out ? '↑' : initials(item.name)}</div>
       <div class="info">
         <div class="name">${escapeHtml(item.name)}</div>
-        <div class="meta">${fmtDateShort(item.date)}${item.note ? ' · ' + escapeHtml(item.note) : ''}</div>
+        <div class="meta">${item._book ? BOOKS[item._book].title + ' · ' : ''}${fmtDateShort(item.date)}${item.note ? ' · ' + escapeHtml(item.note) : ''}</div>
       </div>
       <div class="amt mono">${out ? '−' : ''}${fmtVND(item.amount)}</div>
-      <button class="del" aria-label="Xóa">✕</button>
+      ${isSummary() ? '' : '<button class="del" aria-label="Xóa">✕</button>'}
     `;
-    row.querySelector('.info').addEventListener('click', () => openSheet(item));
-    row.querySelector('.dot').addEventListener('click', () => openSheet(item));
-    row.querySelector('.amt').addEventListener('click', () => openSheet(item));
-    row.querySelector('.del').addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleDelete(item.id);
-    });
+    // Ở tab Tổng, bấm vào dòng sẽ chuyển sang đúng sổ và mở form sửa
+    const open = isSummary() ? () => openInBook(item._book, item.id) : () => openSheet(item);
+    row.querySelector('.info').addEventListener('click', open);
+    row.querySelector('.dot').addEventListener('click', open);
+    row.querySelector('.amt').addEventListener('click', open);
+    if(!isSummary()){
+      row.querySelector('.del').addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleDelete(item.id);
+      });
+    }
     list.appendChild(row);
   });
+}
+
+function openInBook(book, id){
+  switchBook(book);
+  const item = items.find(i => i.id === id);
+  if(item) openSheet(item);
 }
 
 function escapeHtml(str){
@@ -1042,6 +1088,7 @@ document.getElementById('confirmBackdrop').addEventListener('click', () => close
 
 document.querySelectorAll('#bookTabs .book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === currentBook));
 document.body.classList.toggle('book-luong', currentBook === 'luong');
+document.body.classList.toggle('book-tong', currentBook === SUMMARY);
 setFormType('in');
 loadItems();
 
