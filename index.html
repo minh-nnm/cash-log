@@ -19,6 +19,8 @@
   try{ pref = localStorage.getItem('so-thu-tien-theme') || 'auto'; }catch(e){}
   var dark = pref === 'dark' || (pref === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  // Đã đặt mã PIN thì che nội dung ngay từ đầu, mở khóa xong mới hiện
+  try{ if(localStorage.getItem('so-thu-tien-pin')) document.documentElement.setAttribute('data-locked', ''); }catch(e){}
 })();
 </script>
 <style>
@@ -731,6 +733,54 @@
   }
   .theme-head svg{flex:none; color:var(--accent);}
   .theme-box .book-tabs{background:var(--paper);}
+  .theme-head .menu-sub{display:block; font-size:12px; font-weight:400; color:var(--muted); margin-top:2px;}
+  .theme-head .menu-sub{display:block; font-size:12px; font-weight:400; color:var(--muted); margin-top:2px;}
+  .pin-actions{display:flex; gap:8px;}
+  .pin-actions .btn{padding:10px; font-size:14px;}
+
+  /* Màn khóa mã PIN */
+  .lock-screen{
+    display:none;
+    position:fixed; inset:0;
+    z-index:50;
+    background:var(--paper);
+    align-items:center;
+    justify-content:center;
+    padding:calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
+  }
+  html[data-locked] .lock-screen{display:flex;}
+  html[data-locked] .app, html[data-locked] .fab-wrap, html[data-locked] .sheet{visibility:hidden;}
+  .lock-inner{width:100%; max-width:320px; text-align:center;}
+  .lock-icon{
+    width:56px; height:56px;
+    margin:0 auto 14px;
+    border-radius:18px;
+    background:var(--accent-dim);
+    color:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .lock-inner h2{margin:0; font-size:20px;}
+  .lock-sub{margin:6px 0 22px; font-size:14px; color:var(--muted); min-height:20px;}
+  .pin-dots{display:flex; justify-content:center; gap:16px; margin-bottom:30px;}
+  .pin-dots i{width:14px; height:14px; border-radius:50%; border:2px solid var(--ink); transition:background .1s ease;}
+  .pin-dots i.on{background:var(--ink);}
+  .pin-dots.shake{animation:shake .35s ease;}
+  @keyframes shake{20%,60%{transform:translateX(-8px);} 40%,80%{transform:translateX(8px);}}
+  .keypad{display:grid; grid-template-columns:repeat(3, 72px); gap:14px 22px; justify-content:center;}
+  .keypad button{
+    width:72px; height:72px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    font-size:26px;
+    font-weight:500;
+    cursor:pointer;
+  }
+  .keypad button:active{background:var(--accent-dim);}
+  .keypad .key-blank{visibility:hidden;}
+  .keypad .key-del{border:none; background:transparent; display:flex; align-items:center; justify-content:center;}
+  .lock-link{margin-top:22px; border:none; background:transparent; color:var(--accent); font-size:14px; font-weight:600; cursor:pointer; padding:8px;}
 
   .sheet-text{color:var(--muted); font-size:14px; line-height:1.6; margin:0 0 16px;}
   .settle-summary{
@@ -765,7 +815,7 @@
     opacity:0;
     pointer-events:none;
     transition:all .25s ease;
-    z-index:40;
+    z-index:70;
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 </style>
@@ -952,11 +1002,22 @@
       <button class="book-tab" data-theme-opt="dark">Tối</button>
     </div>
   </div>
+  <div class="theme-box">
+    <div class="theme-head">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      <span>Khóa bằng mã PIN<span class="menu-sub" id="pinState">Đang tắt</span></span>
+    </div>
+    <div class="pin-actions">
+      <button class="btn btn-primary" id="pinOnBtn">Bật khóa</button>
+      <button class="btn btn-ghost" id="pinChangeBtn">Đổi mã PIN</button>
+      <button class="btn btn-ghost" id="pinOffBtn">Tắt khóa</button>
+    </div>
+  </div>
   <button class="btn btn-ghost" id="settingsCloseBtn" style="width:100%;">Đóng</button>
 </div>
 
-<div class="sheet-backdrop" id="confirmBackdrop"></div>
-<div class="sheet" id="confirmSheet">
+<div class="sheet-backdrop" id="confirmBackdrop" style="z-index:60;"></div>
+<div class="sheet" id="confirmSheet" style="z-index:61; visibility:visible;">
   <h2>Xác nhận</h2>
   <p id="confirmMsg" class="sheet-text"></p>
   <div class="sheet-actions">
@@ -1017,6 +1078,27 @@
   <div class="sheet-actions">
     <button class="btn btn-ghost" id="resultCloseBtn">Đóng</button>
     <button class="btn btn-primary" id="resultShareBtn">Chia sẻ</button>
+  </div>
+</div>
+
+<div class="lock-screen" id="lockScreen" role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+  <div class="lock-inner">
+    <div class="lock-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
+    <h2 id="lockTitle">Nhập mã PIN</h2>
+    <p class="lock-sub" id="lockSub">Sổ thu tiền đang được khóa</p>
+    <div class="pin-dots" id="pinDots"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="keypad" id="keypad">
+      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+      <button class="key-blank" tabindex="-1" aria-hidden="true"></button>
+      <button data-key="0">0</button>
+      <button class="key-del" data-key="del" aria-label="Xóa">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
+      </button>
+    </div>
+    <button class="lock-link" id="lockForgot">Quên mã PIN?</button>
+    <button class="lock-link" id="lockCancel" style="display:none;">Hủy</button>
   </div>
 </div>
 
@@ -1942,6 +2024,123 @@ function closeStats(){
   document.getElementById('statsSheet').classList.remove('open');
 }
 
+// ---- Khóa bằng mã PIN ----
+// Chỉ lưu SHA-256(muối + mã), không lưu mã gốc. Đây là khóa chống người khác mở xem trên máy này,
+// không mã hóa dữ liệu (dữ liệu vẫn nằm trong trình duyệt như trước).
+const PIN_KEY = 'so-thu-tien-pin';
+const PIN_LEN = 6;
+const LOCK_AFTER_MS = 60 * 1000; // ra nền quá 1 phút thì khóa lại
+let lockMode = null;   // 'unlock' | 'setup1' | 'setup2' | 'verify-off' | 'verify-change'
+let pinEntry = '';
+let pinFirst = '';
+let pinFails = 0;
+let pinBlockedUntil = 0;
+let hiddenAt = 0;
+
+function pinRecord(){
+  try{ return JSON.parse(localStorage.getItem(PIN_KEY) || 'null'); }catch(e){ return null; }
+}
+const hasPin = () => !!pinRecord();
+async function sha256Hex(text){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function checkPin(pin){
+  const rec = pinRecord();
+  return !!rec && rec.hash === await sha256Hex(rec.salt + pin);
+}
+async function savePin(pin){
+  const salt = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+  localStorage.setItem(PIN_KEY, JSON.stringify({ salt, hash: await sha256Hex(salt + pin) }));
+}
+
+const LOCK_TEXT = {
+  'unlock':        ['Nhập mã PIN', 'Sổ thu tiền đang được khóa'],
+  'setup1':        ['Đặt mã PIN', `Chọn ${PIN_LEN} số để khóa sổ trên máy này`],
+  'setup2':        ['Nhập lại mã PIN', 'Nhập lại để xác nhận'],
+  'verify-off':    ['Nhập mã PIN hiện tại', 'Để tắt khóa'],
+  'verify-change': ['Nhập mã PIN hiện tại', 'Để đổi mã PIN'],
+};
+function showLock(mode, sub){
+  lockMode = mode;
+  pinEntry = '';
+  const [title, defSub] = LOCK_TEXT[mode];
+  document.getElementById('lockTitle').textContent = title;
+  document.getElementById('lockSub').textContent = sub || defSub;
+  document.getElementById('lockForgot').style.display = mode === 'unlock' ? '' : 'none';
+  document.getElementById('lockCancel').style.display = mode === 'unlock' ? 'none' : '';
+  document.documentElement.setAttribute('data-locked', '');
+  renderPinDots();
+}
+function hideLock(){
+  lockMode = null;
+  pinEntry = '';
+  document.documentElement.removeAttribute('data-locked');
+}
+function renderPinDots(){
+  document.querySelectorAll('#pinDots i').forEach((d, i) => d.classList.toggle('on', i < pinEntry.length));
+}
+function pinError(msg){
+  const dots = document.getElementById('pinDots');
+  dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake');
+  document.getElementById('lockSub').textContent = msg;
+  pinEntry = '';
+  renderPinDots();
+}
+async function pinComplete(){
+  const pin = pinEntry;
+  if(lockMode === 'setup1'){ pinFirst = pin; showLock('setup2'); return; }
+  if(lockMode === 'setup2'){
+    if(pin !== pinFirst){ showLock('setup1', 'Hai lần nhập không khớp, đặt lại nhé'); return; }
+    await savePin(pin);
+    hideLock(); refreshPinSettings();
+    showToast('Đã bật khóa bằng mã PIN');
+    return;
+  }
+  if(!(await checkPin(pin))){
+    pinFails++;
+    if(pinFails >= 5){ pinBlockedUntil = Date.now() + 30000; pinFails = 0; pinError('Sai quá nhiều lần, thử lại sau 30 giây'); }
+    else pinError('Sai mã PIN, thử lại');
+    return;
+  }
+  pinFails = 0;
+  if(lockMode === 'unlock'){ hideLock(); return; }
+  if(lockMode === 'verify-off'){
+    localStorage.removeItem(PIN_KEY);
+    hideLock(); refreshPinSettings();
+    showToast('Đã tắt khóa bằng mã PIN');
+    return;
+  }
+  if(lockMode === 'verify-change') showLock('setup1');
+}
+function pinPress(key){
+  if(!lockMode) return;
+  if(Date.now() < pinBlockedUntil){ pinError('Sai quá nhiều lần, thử lại sau 30 giây'); return; }
+  if(key === 'del'){ pinEntry = pinEntry.slice(0, -1); renderPinDots(); return; }
+  if(pinEntry.length >= PIN_LEN) return;
+  pinEntry += key;
+  renderPinDots();
+  if(pinEntry.length === PIN_LEN) setTimeout(pinComplete, 120);
+}
+async function handleForgotPin(){
+  const ok = await showConfirm('Quên mã PIN thì chỉ có thể XÓA TOÀN BỘ dữ liệu trên máy này để mở lại. Sau đó khôi phục bằng file sao lưu CSV (Quản lý sổ → Nhập dữ liệu từ Excel). Xóa hết?', 'Xóa hết');
+  if(!ok) return;
+  Object.keys(localStorage).filter(k => k.startsWith('so-thu-tien') || k.startsWith('so-luong')).forEach(k => localStorage.removeItem(k));
+  location.reload();
+}
+function refreshPinSettings(){
+  const on = hasPin();
+  document.getElementById('pinState').textContent = on ? 'Đang bật · mở app phải nhập mã' : 'Đang tắt';
+  document.getElementById('pinOnBtn').style.display = on ? 'none' : '';
+  document.getElementById('pinChangeBtn').style.display = on ? '' : 'none';
+  document.getElementById('pinOffBtn').style.display = on ? '' : 'none';
+}
+function startPinFlow(mode){
+  if(!(window.crypto && crypto.subtle)){ showToast('Trình duyệt này không hỗ trợ khóa mã PIN'); return; }
+  closeSettings();
+  showLock(mode);
+}
+
 function openSettle(){
   const { thu, luong } = unsettledItems();
   const all = [...thu, ...luong];
@@ -2362,6 +2561,23 @@ document.getElementById('pastBannerBtn').addEventListener('click', () => setView
 document.getElementById('pastShareBtn').addEventListener('click', () => shareSettlement(viewPeriod));
 document.getElementById('resultCloseBtn').addEventListener('click', closeResult);
 document.getElementById('statsBtn').addEventListener('click', openStats);
+document.querySelectorAll('#keypad [data-key]').forEach(btn => btn.addEventListener('click', () => pinPress(btn.dataset.key)));
+document.addEventListener('keydown', (e) => {
+  if(!lockMode) return;
+  if(/^[0-9]$/.test(e.key)) pinPress(e.key);
+  else if(e.key === 'Backspace') pinPress('del');
+});
+document.getElementById('lockForgot').addEventListener('click', handleForgotPin);
+document.getElementById('lockCancel').addEventListener('click', hideLock);
+document.getElementById('pinOnBtn').addEventListener('click', () => startPinFlow('setup1'));
+document.getElementById('pinChangeBtn').addEventListener('click', () => startPinFlow('verify-change'));
+document.getElementById('pinOffBtn').addEventListener('click', () => startPinFlow('verify-off'));
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){ hiddenAt = Date.now(); return; }
+  if(hasPin() && !lockMode && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) showLock('unlock');
+});
+refreshPinSettings();
+if(hasPin()) showLock('unlock');
 document.getElementById('statsCloseBtn').addEventListener('click', closeStats);
 document.getElementById('statsBackdrop').addEventListener('click', closeStats);
 document.querySelectorAll('#statsScope .book-tab').forEach(btn => {
