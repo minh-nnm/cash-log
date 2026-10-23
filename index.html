@@ -350,6 +350,24 @@
   .breakdown{margin-top:10px; font-size:12px; opacity:.7;}
 
   .filters{margin:18px 20px 0;}
+  .search-box{position:relative; margin-bottom:10px;}
+  .search-box svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;}
+  .search-box input{
+    width:100%;
+    -webkit-appearance:none;
+    appearance:none;
+    padding:10px 12px 10px 38px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    font-size:16px;
+    color:var(--ink);
+  }
+  .search-box input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .suggest{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .suggest:empty{display:none;}
+  .suggest .chip{padding:6px 12px;}
+
   .chip-row{
     display:flex;
     gap:8px;
@@ -755,6 +773,10 @@
 </div>
 
 <div class="filters">
+  <div class="search-box">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input type="search" id="searchInput" placeholder="Tìm theo tên hoặc ghi chú" autocomplete="off" enterkeyhint="search">
+  </div>
   <div class="book-tabs seg-sm" id="typeFilter">
     <button class="book-tab active" data-type="all">Tất cả</button>
     <button class="book-tab" data-type="in">Tiền vào</button>
@@ -794,6 +816,7 @@
   <div class="field">
     <label for="fName">Người chuyển</label>
     <input type="text" id="fName" placeholder="VD: Nguyễn Văn A" autocomplete="off">
+    <div class="suggest" id="nameSuggest"></div>
   </div>
   <div class="field">
     <label for="fAmount">Số tiền</label>
@@ -940,6 +963,7 @@ let editingId = null;
 let activeFilter = 'all';
 let dateRange = null; // { from, to } khi lọc theo khoảng ngày
 let typeFilter = 'all'; // 'all' | 'in' | 'out'
+let searchQuery = '';    // tìm theo tên/ghi chú, không phân biệt dấu
 let formType = 'in';    // kiểu đang chọn trong form thêm/sửa
 
 // Quyết toán: dùng chung cho cả 2 sổ. Mỗi lần quyết toán gắn mã lần đó (trường settlement)
@@ -1473,6 +1497,41 @@ async function handleScanImage(file){
   }
 }
 
+// Tìm không phân biệt dấu, khớp từ đầu mỗi từ: "an" khớp "Nguyễn Văn An" nhưng không khớp "Trần"
+function matchesQuery(text, q){
+  return (' ' + stripDiacritics(text).toLowerCase().replace(/\s+/g, ' ')).includes(' ' + q);
+}
+
+// Gợi ý tên đã từng nhập trong sổ đang mở (cùng loại thu/rút), tên dùng nhiều xếp trước
+function nameSuggestions(query){
+  const count = new Map();
+  readBook(currentBook in BOOKS ? currentBook : 'thu')
+    .filter(i => isOut(i) === (formType === 'out'))
+    .forEach(i => { const n = (i.name || '').trim(); if(n) count.set(n, (count.get(n) || 0) + 1); });
+  const q = stripDiacritics(query.trim()).toLowerCase();
+  return [...count.entries()]
+    .filter(([n]) => stripDiacritics(n).toLowerCase() !== q && (!q || matchesQuery(n, q)))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi'))
+    .slice(0, 5)
+    .map(([n]) => n);
+}
+function renderNameSuggest(){
+  const box = document.getElementById('nameSuggest');
+  box.innerHTML = '';
+  nameSuggestions(document.getElementById('fName').value).forEach(n => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.textContent = n;
+    chip.onclick = () => {
+      document.getElementById('fName').value = n;
+      renderNameSuggest();
+      document.getElementById('fAmount').focus();
+    };
+    box.appendChild(chip);
+  });
+}
+
 function setFormType(type){
   formType = type === 'out' ? 'out' : 'in';
   const cfg = formType === 'out' ? OUT_CFG : (BOOKS[currentBook] || BOOKS.thu);
@@ -1480,12 +1539,15 @@ function setFormType(type){
   document.querySelector('label[for="fName"]').textContent = cfg.nameLabel;
   document.getElementById('fName').placeholder = cfg.namePlaceholder;
   document.getElementById('sheetTitle').textContent = editingId ? cfg.editTitle : cfg.addTitle;
+  renderNameSuggest();
 }
 
 function resetFilters(){
   activeFilter = 'all';
   typeFilter = 'all';
   dateRange = null;
+  searchQuery = '';
+  document.getElementById('searchInput').value = '';
   document.getElementById('rangeFrom').value = '';
   document.getElementById('rangeTo').value = '';
   document.getElementById('rangeBar').classList.remove('open');
@@ -1847,6 +1909,8 @@ function render(){
   } else {
     filtered = activeFilter === 'all' ? shown : shown.filter(i => monthKey(i.date) === activeFilter);
   }
+  const q = stripDiacritics(searchQuery.trim()).toLowerCase();
+  if(q) filtered = filtered.filter(i => matchesQuery(`${i.name} ${i.note || ''}`, q));
   const tin = sumAmount(filtered.filter(i => !isOut(i)));
   const tout = sumAmount(filtered.filter(isOut));
   if(typeFilter !== 'all') filtered = filtered.filter(i => isOut(i) === (typeFilter === 'out'));
@@ -1874,6 +1938,7 @@ function render(){
   } else if(activeFilter !== 'all'){
     totalLabelText += ` ${monthLabel(activeFilter)}`;
   }
+  if(q) totalLabelText += ` · “${searchQuery.trim()}”`;
   document.getElementById('totalLabel').textContent = totalLabelText;
 
   const list = document.getElementById('list');
@@ -1882,7 +1947,8 @@ function render(){
     const empty = document.createElement('div');
     empty.className = 'empty';
     empty.innerHTML = `<div class="empty-icon">${ICON_EMPTY}</div>`;
-    empty.append(settlements.length && !shown.length ? 'Chưa có giao dịch nào trong kỳ này.' : viewCfg().emptyText);
+    empty.append(q && shown.length ? 'Không tìm thấy giao dịch phù hợp.'
+      : settlements.length && !shown.length ? 'Chưa có giao dịch nào trong kỳ này.' : viewCfg().emptyText);
     list.appendChild(empty);
     return;
   }
@@ -1923,6 +1989,8 @@ document.getElementById('backdrop').addEventListener('click', closeSheet);
 document.getElementById('saveBtn').addEventListener('click', handleSave);
 document.getElementById('deleteBtn').addEventListener('click', () => { if(editingId) handleDelete(editingId); });
 document.getElementById('fAmount').addEventListener('input', formatAmountInput);
+document.getElementById('fName').addEventListener('input', renderNameSuggest);
+document.getElementById('searchInput').addEventListener('input', (e) => { searchQuery = e.target.value; render(); });
 // Xóa ngay cạnh dấu chấm thì bỏ qua dấu chấm để xóa chữ số, nếu không dấu chấm sẽ bị thêm lại ngay
 document.getElementById('fAmount').addEventListener('beforeinput', (e) => {
   const el = e.target;
