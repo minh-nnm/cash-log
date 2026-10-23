@@ -824,7 +824,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script>
 const BOOKS = {
   thu: {
@@ -1145,69 +1145,223 @@ function stripDiacritics(str){
   return str.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D');
 }
 
-function parseTransactionText(rawText){
-  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-  const norm = lines.map(l => stripDiacritics(l).toLowerCase());
-
-  const findValueForLabel = (labelKeywords, sameLineRegex) => {
-    for(let i=0;i<lines.length;i++){
-      if(labelKeywords.some(k => norm[i].includes(k))){
-        let m = lines[i].match(sameLineRegex);
-        if(m) return m;
-        for(let j=i+1;j<Math.min(i+3,lines.length);j++){
-          m = lines[j].match(sameLineRegex);
-          if(m) return m;
-        }
-      }
+// ---- Đọc ảnh giao dịch (OCR) ----
+// Nhãn thường gặp trên biên lai/thông báo ngân hàng (đã bỏ dấu, chữ thường)
+const OCR_LABELS = {
+  amount: ['so tien giao dich', 'so tien', 'gia tri giao dich', 'gia tri', 'tong tien', 'thanh tien', 'amount', 'gd'],
+  // Con số đi kèm các nhãn này không phải số tiền giao dịch
+  decoy: ['so du', 'sd', 'phi', 'ma giao dich', 'ma gd', 'ma tham chieu', 'so tham chieu', 'so tai khoan', 'tai khoan', 'tk', 'stk', 'han muc', 'kha dung', 'ref', 'trace', 'vat'],
+  date: ['ngay giao dich', 'thoi gian giao dich', 'ngay gd', 'ngay', 'thoi gian', 'time', 'date'],
+  nameIn: ['ten nguoi chuyen', 'nguoi chuyen', 'nguoi gui', 'ten tai khoan nguon', 'tu tai khoan', 'tu'],
+  nameOut: ['ten nguoi nhan', 'nguoi nhan', 'ten tai khoan nhan', 'den tai khoan', 'den'],
+  note: ['noi dung giao dich', 'noi dung chuyen khoan', 'noi dung', 'loi nhan', 'dien giai', 'mo ta', 'ghi chu', 'nd'],
+  other: ['ngan hang', 'trang thai', 'loai giao dich', 'loai', 'tai', 'kenh', 'chia se', 'luu anh', 'dong'],
+};
+const allLabels = () => Object.values(OCR_LABELS).flat();
+// Dòng (đã bỏ dấu) bắt đầu bằng nhãn nào trong danh sách? Trả về nhãn dài nhất khớp
+function labelAt(normLine, keys){
+  return keys.filter(k => normLine === k || new RegExp(`^${k}(\\s|:|-|$)`).test(normLine))
+    .sort((a,b) => b.length - a.length)[0] || null;
+}
+// Bỏ các từ của nhãn ở đầu dòng gốc (giữ dấu), lấy phần giá trị phía sau
+function valueAfterLabel(line, label){
+  const words = line.split(' ');
+  return words.slice(label.split(' ').length).join(' ').replace(/^[\s:.\-–]+/, '').trim();
+}
+const DATE_RE = /(?<![\d.,])(\d{1,2})\s?([\/\-.])\s?(\d{1,2})\s?\2\s?(\d{4}|\d{2})(?![\d.,])/g;
+const TIME_RE = /(?<!\d)\d{1,2}:\d{2}(?::\d{2})?(?!\d)/g;
+function findDates(s){
+  const out = [];
+  // Bỏ giờ (14:30) trước để "14:30 - 05/10/2026" không bị đọc thành ngày 30/05
+  for(const m of s.replace(TIME_RE, ' ').matchAll(DATE_RE)){
+    const d = +m[1], mo = +m[3];
+    let y = +m[4];
+    if(m[4].length === 2) y += 2000;
+    if(d >= 1 && d <= 31 && mo >= 1 && mo <= 12 && y >= 2000 && y <= 2099){
+      out.push(`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
     }
-    return null;
+  }
+  return out;
+}
+// Sửa lỗi OCR hay gặp trong cụm số: O -> 0, l/I -> 1 (chỉ trong cụm trông như số tiền)
+function fixDigits(s){
+  return s.replace(/[+\-−]?[\dOoIl|]+(?:[.,\s][\dOoIl]{3})+|[\dOo]{4,}/g, t => {
+    const digits = (t.match(/\d/g) || []).length;
+    return digits >= 3 ? t.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1') : t;
+  });
+}
+const AMOUNT_RE = /(?<![\d.,])([+\-−]?)\s?(\d{1,3}(?:[.,]\d{3})+|\d{1,3}(?:\s\d{3})+(?=\s?(?:vn[dđ]|đ|₫|d\b))|\d{4,})(?![\d])\s?(vn[dđ]|đ|₫|d(?![a-z]))?/gi;
+
+function parseTransactionText(rawText){
+  // Tách thêm theo dấu | để đọc được tin nhắn biến động số dư viết trên 1 dòng
+  const lines = rawText.split(/\n|\|/).map(l => fixDigits(l.replace(/\s+/g, ' ').trim())).filter(Boolean);
+  const norm = lines.map(l => stripDiacritics(l).toLowerCase());
+  const hasDigit = i => /\d/.test(lines[i] || '');
+  // Dòng i có nhãn thuộc nhóm keys không: nhãn ở đầu dòng, hoặc là cả dòng ngay trên
+  // (bố cục nhãn trên, giá trị dưới). Chỉ xét đầu dòng để tiêu đề như "Tiền vào tài khoản" không bị coi là nhãn.
+  const ctxHas = (i, keys) => !!labelAt(norm[i], keys) || (i > 0 && !hasDigit(i - 1) && !!labelAt(norm[i - 1], keys));
+
+  // --- Số tiền: chấm điểm mọi con số, lấy số điểm cao nhất ---
+  let best = null;
+  lines.forEach((line, i) => {
+    const clean = line.replace(DATE_RE, ' ').replace(TIME_RE, ' ');
+    for(const m of clean.matchAll(AMOUNT_RE)){
+      const value = parseInt(m[2].replace(/\D/g, ''), 10);
+      if(!value || value < 1000) continue;
+      if(ctxHas(i, OCR_LABELS.decoy) && !labelAt(norm[i], OCR_LABELS.amount)) continue;
+      const grouped = /[.,\s]/.test(m[2]);
+      // Số dài không có dấu phân cách mà cũng không có đơn vị: thường là số tài khoản/mã
+      if(!grouped && !m[3]) continue;
+      let score = 0;
+      if(ctxHas(i, OCR_LABELS.amount)) score += 4;
+      if(m[3]) score += 3;
+      if(m[1]) score += 3;
+      if(grouped) score += 1;
+      score -= i * 0.01; // hòa điểm thì ưu tiên số ở phía trên
+      if(!best || score > best.score) best = { value, sign: m[1], score };
+    }
+  });
+  const amount = best ? best.value : null;
+
+  // --- Ngày: ưu tiên dòng có nhãn ngày/thời gian, không thì lấy ngày hợp lệ đầu tiên ---
+  let date = '';
+  for(let i = 0; i < lines.length && !date; i++){
+    if(ctxHas(i, OCR_LABELS.date)) date = findDates(lines[i])[0] || '';
+  }
+  if(!date) date = findDates(lines.join(' '))[0] || '';
+
+  // --- Loại: dấu của số tiền là chắc nhất, sau đó mới đến từ khóa ---
+  const text = norm.join(' ');
+  let type = 'in';
+  if(best && /[-−]/.test(best.sign)) type = 'out';
+  else if(!(best && best.sign === '+')){
+    const outKw = ['ghi no', 'rut tien', 'da chuyen', 'thanh toan', 'nguoi nhan'];
+    const inKw = ['ghi co', 'nhan tien', 'tien vao', 'nguoi chuyen', 'nguoi gui'];
+    if(outKw.some(k => text.includes(k)) && !inKw.some(k => text.includes(k))) type = 'out';
+  }
+
+  // Giá trị của 1 nhãn: phần sau nhãn trên cùng dòng, hoặc dòng kế tiếp nếu nhãn đứng riêng
+  const valueOf = (keys, multiLine) => {
+    for(let i = 0; i < lines.length; i++){
+      const label = labelAt(norm[i], keys);
+      if(!label) continue;
+      let parts = [valueAfterLabel(lines[i], label)].filter(Boolean);
+      // Nội dung dài có thể xuống dòng: nối thêm tối đa 1 dòng nếu dòng đó không phải nhãn khác
+      const extra = parts.length ? (multiLine ? 1 : 0) : 1 + (multiLine ? 1 : 0);
+      for(let j = i + 1; j <= i + extra && j < lines.length; j++){
+        if(labelAt(norm[j], allLabels()) || (multiLine && /\d{1,3}(?:[.,]\d{3})+/.test(lines[j]))) break;
+        parts.push(lines[j]);
+      }
+      const v = parts.join(' ').trim();
+      if(v) return v;
+    }
+    return '';
+  };
+  const titleCase = s => s.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const asName = s => {
+    const v = s.replace(/[^A-Za-zÀ-ỹ\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const words = v.split(' ');
+    return words.length >= 2 && words.length <= 6 ? titleCase(v) : '';
   };
 
-  let date = '';
-  const dateM = findValueForLabel(['ngay giao dich','ngay gd'], /(\d{2})\/(\d{2})\/(\d{4})/)
-             || rawText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  if(dateM) date = `${dateM[3]}-${dateM[2]}-${dateM[1]}`;
-
-  let amount = null;
-  const amtM = findValueForLabel(['so tien','thanh toan'], /(\d{1,3}(?:[.,]\d{3})+)/)
-            || rawText.match(/(\d{1,3}(?:[.,]\d{3})+)/);
-  if(amtM) amount = parseInt(amtM[1].replace(/[.,]/g,''), 10);
-
-  let note = '';
-  let name = '';
-  const contentIdx = norm.findIndex(l => l.includes('noi dung'));
-  if(contentIdx !== -1){
-    const firstLine = lines[contentIdx].replace(/^.*?d[ịi]ch\s*/i, '').trim();
-    note = [firstLine, ...lines.slice(contentIdx+1)].join(' ').replace(/\s+/g,' ').trim();
+  let note = valueOf(OCR_LABELS.note, true).replace(/\s+/g, ' ').trim();
+  if(!note){
+    // Ảnh mờ làm mất nhãn "Nội dung": lấy dòng có "chuyen tien/khoan", bỏ ký tự rác 1-2 chữ ở đầu
+    const i = norm.findIndex(l => /chuyen (tien|khoan)/.test(l));
+    if(i !== -1) note = lines[i].replace(/^(\S{1,2}\s+)+/, '').trim();
   }
-  const nameM = note.match(/^([A-Za-zÀ-Ỹà-ỹ\s]{4,40}?)\s+chuy[eể]n\s*(ti[eề]n|kho[aả]n)/i);
-  if(nameM){
-    name = nameM[1].trim().split(/\s+/).map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+  let name = asName(valueOf(type === 'out' ? OCR_LABELS.nameOut : OCR_LABELS.nameIn, false));
+  if(!name){
+    // Không có nhãn tên: thử "NGUYEN VAN A chuyen tien ..." ở đầu nội dung
+    const m = stripDiacritics(note).match(/^([A-Za-z\s]{4,40}?)\s+chuyen\s*(tien|khoan)/i);
+    if(m) name = asName(note.split(' ').slice(0, m[1].trim().split(/\s+/).length).join(' '));
   }
-
-  // Chỉ đoán là khoản rút khi có dấu hiệu rõ: dấu trừ trước số tiền hoặc từ khóa ghi nợ/rút tiền
-  const outByKeyword = norm.some(l => l.includes('ghi no') || l.includes('rut tien'));
-  const outBySign = /[-−]\s*\d{1,3}(?:[.,]\d{3})+/.test(rawText);
-  const type = (outByKeyword || outBySign) ? 'out' : 'in';
 
   return { date, amount, name, note, type };
 }
 
+// Chuẩn bị ảnh cho OCR: phóng to ảnh nhỏ, đưa về chữ tối trên nền sáng, tăng tương phản
+async function prepareImage(file){
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(3, Math.max(1, 1600 / bmp.width));
+  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, w, h);
+  bmp.close && bmp.close();
+  const img = ctx.getImageData(0, 0, w, h), px = img.data;
+  let sum = 0;
+  for(let i = 0; i < px.length; i += 4) sum += (px[i] * 3 + px[i+1] * 6 + px[i+2]) / 10;
+  const dark = sum / (px.length / 4) < 110;
+  // Nền sáng: lấy kênh màu tối nhất để chữ màu (xanh, hồng...) thành đậm.
+  // Nền tối: lấy kênh sáng nhất rồi đảo ngược để thành chữ tối trên nền sáng.
+  const hist = new Uint32Array(256);
+  for(let i = 0; i < px.length; i += 4){
+    const v = dark ? 255 - Math.max(px[i], px[i+1], px[i+2]) : Math.min(px[i], px[i+1], px[i+2]);
+    px[i] = v; hist[v]++;
+  }
+  // Kéo giãn tương phản theo phân vị 1% - 99%
+  const n = px.length / 4;
+  let lo = 0, hi = 255, acc = 0;
+  for(let v = 0; v < 256; v++){ acc += hist[v]; if(acc >= n * 0.01){ lo = v; break; } }
+  acc = 0;
+  for(let v = 255; v >= 0; v--){ acc += hist[v]; if(acc >= n * 0.01){ hi = v; break; } }
+  const range = Math.max(1, hi - lo);
+  for(let i = 0; i < px.length; i += 4){
+    const v = Math.max(0, Math.min(255, Math.round((px[i] - lo) * 255 / range)));
+    px[i] = px[i+1] = px[i+2] = v; px[i+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+// Dùng chung 1 worker OCR: lần quét sau không phải nạp lại bộ chữ tiếng Việt
+let ocrWorker = null;
+function getOcrWorker(){
+  if(!ocrWorker){
+    ocrWorker = Tesseract.createWorker('vie+eng').catch(err => { ocrWorker = null; throw err; });
+  }
+  return ocrWorker;
+}
+
 async function handleScanImage(file){
   if(!file) return;
+  if(typeof Tesseract === 'undefined'){ showToast('Cần có mạng để dùng tính năng quét ảnh'); return; }
   const scanBtn = document.getElementById('scanBtn');
   scanBtn.classList.add('loading');
   showToast('Đang đọc ảnh giao dịch...');
   try{
-    const { data: { text } } = await Tesseract.recognize(file, 'vie+eng');
-    const parsed = parseTransactionText(text);
+    const image = await prepareImage(file).catch(() => file);
+    const worker = await getOcrWorker();
+    const { data: { text } } = await worker.recognize(image);
+    let parsed = parseTransactionText(text);
+    if(!parsed.amount){
+      // Lần 2 ở chế độ chữ rời rạc: bắt được con số đứng riêng mà lần đầu có thể bỏ sót
+      await worker.setParameters({ tessedit_pageseg_mode: '11' });
+      try{
+        const retry = parseTransactionText((await worker.recognize(image)).data.text);
+        if(retry.amount){
+          parsed = {
+            amount: retry.amount,
+            type: retry.type,
+            date: parsed.date || retry.date,
+            name: parsed.name || retry.name,
+            note: parsed.note || retry.note,
+          };
+        }
+      }finally{
+        await worker.setParameters({ tessedit_pageseg_mode: '3' });
+      }
+    }
     openSheet(null, parsed.type);
     document.getElementById('sheetTitle').textContent = 'Xác nhận giao dịch (từ ảnh)';
     if(parsed.name) document.getElementById('fName').value = parsed.name;
     if(parsed.amount) setAmountInput(parsed.amount);
     if(parsed.date) document.getElementById('fDate').value = parsed.date;
     if(parsed.note) document.getElementById('fNote').value = parsed.note;
-    showToast('Đã đọc xong, kiểm tra lại rồi lưu nhé');
+    showToast(parsed.amount ? 'Đã đọc xong, kiểm tra lại rồi lưu nhé' : 'Không thấy số tiền trong ảnh, nhập tay giúp nhé');
   }catch(err){
     showToast('Không đọc được ảnh, thử ảnh rõ hơn');
   }finally{
