@@ -206,6 +206,33 @@
   .period-pill svg{flex:none; opacity:.8;}
   .period-pill:active{background:rgba(255,255,255,.22);}
 
+  /* Nhắc sao lưu */
+  .notice{
+    display:none;
+    align-items:center;
+    gap:10px;
+    margin:14px 20px 0;
+    padding:10px 8px 10px 12px;
+    border-radius:14px;
+    background:var(--warn-dim);
+    color:var(--ink);
+    font-size:13px;
+  }
+  .notice.open{display:flex;}
+  .notice > svg{flex:none; color:var(--warn);}
+  .notice .text{flex:1; min-width:0; line-height:1.4;}
+  .notice button{
+    flex:none;
+    border:none;
+    background:transparent;
+    font-size:13px;
+    font-weight:700;
+    color:var(--warn);
+    padding:6px;
+    cursor:pointer;
+  }
+  .notice .notice-x{color:var(--muted); font-size:18px; line-height:1; padding:4px 6px;}
+
   .past-banner{
     display:none;
     align-items:center;
@@ -677,6 +704,13 @@
   </button>
 </header>
 
+<div class="notice" id="backupNotice" role="status">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+  <span class="text" id="backupNoticeText"></span>
+  <button id="backupNowBtn">Sao lưu</button>
+  <button class="notice-x" id="backupLaterBtn" aria-label="Nhắc sau">×</button>
+</div>
+
 <div class="book-tabs" id="bookTabs">
   <button class="book-tab active" data-book="thu">Thu tiền</button>
   <button class="book-tab" data-book="luong">Lương</button>
@@ -1088,7 +1122,40 @@ function parseDateShortToISO(s){
   return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
 }
 
-function handleExport(){
+// Nhắc sao lưu khi đã 14 ngày chưa xuất file (tính từ lần sao lưu gần nhất,
+// hoặc từ giao dịch cũ nhất nếu chưa sao lưu lần nào). "Nhắc sau" hoãn 3 ngày.
+const LAST_BACKUP_KEY = 'so-thu-tien-last-backup';
+const BACKUP_SNOOZE_KEY = 'so-thu-tien-backup-snooze';
+const BACKUP_EVERY_DAYS = 14;
+function refreshBackupNotice(){
+  let last = null, snooze = null;
+  try{
+    last = localStorage.getItem(LAST_BACKUP_KEY);
+    snooze = localStorage.getItem(BACKUP_SNOOZE_KEY);
+  }catch(e){}
+  const now = Date.now();
+  let show = false, text = '';
+  if(!(snooze && now < Date.parse(snooze))){
+    if(last){
+      const days = Math.floor((now - Date.parse(last)) / 86400000);
+      show = days >= BACKUP_EVERY_DAYS;
+      text = `Đã ${days} ngày chưa sao lưu`;
+    } else {
+      const dates = [...readBook('thu'), ...readBook('luong')].map(i => i.date).filter(Boolean).sort();
+      const days = dates.length ? Math.floor((now - Date.parse(dates[0] + 'T00:00:00')) / 86400000) : 0;
+      show = days >= BACKUP_EVERY_DAYS;
+      text = 'Chưa sao lưu dữ liệu lần nào';
+    }
+  }
+  document.getElementById('backupNotice').classList.toggle('open', show);
+  document.getElementById('backupNoticeText').textContent = text;
+}
+function snoozeBackupNotice(){
+  try{ localStorage.setItem(BACKUP_SNOOZE_KEY, new Date(Date.now() + 3 * 86400000).toISOString()); }catch(e){}
+  refreshBackupNotice();
+}
+
+function handleExport(filename = `so-thu-tien-${todayISO()}.csv`, toastMsg = 'Đã tải file Excel (.csv)'){
   const rows = [['Loại', 'Tên/Nơi', 'Số tiền', 'Ngày giao dịch', 'Ghi chú', 'Kiểu', 'Kỳ quyết toán']];
   const thu = readBook('thu');
   const luong = readBook('luong');
@@ -1104,12 +1171,14 @@ function handleExport(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `so-thu-tien-${todayISO()}.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  showToast('Đã tải file Excel (.csv)');
+  try{ localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString()); }catch(e){}
+  refreshBackupNotice();
+  showToast(toastMsg);
 }
 
 async function handleImportFile(file){
@@ -1551,7 +1620,9 @@ function handleSettle(){
     return;
   }
   setViewPeriod(settlements.length);
-  showToast(`Đã quyết toán Kỳ ${settlements.length}, bắt đầu kỳ mới`);
+  // Tự sao lưu ngay sau khi quyết toán
+  handleExport(`so-thu-tien-quyet-toan-ky-${settlements.length}-${todayISO()}.csv`,
+    `Đã quyết toán Kỳ ${settlements.length} và tải file sao lưu`);
 }
 
 async function handleUnsettle(){
@@ -1612,6 +1683,7 @@ function syncThemeColor(){
 async function loadItems(){
   items = storage.get();
   render();
+  refreshBackupNotice();
 }
 async function saveItems(){
   const ok = storage.set(items);
@@ -1927,6 +1999,12 @@ if(darkQuery){
   darkQuery.addEventListener ? darkQuery.addEventListener('change', onSystemChange) : darkQuery.addListener(onSystemChange);
 }
 applyTheme();
+document.getElementById('backupNowBtn').addEventListener('click', () => handleExport());
+document.getElementById('backupLaterBtn').addEventListener('click', snoozeBackupNotice);
+// Xin trình duyệt giữ dữ liệu lâu dài, hạn chế bị tự dọn khi máy thiếu bộ nhớ
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persisted().then(p => p || navigator.storage.persist()).catch(() => {});
+}
 setFormType('in');
 setViewPeriod(settlements.length);
 
