@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Sổ thu tiền</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2F9E6E">
@@ -14,224 +14,264 @@
 <meta name="mobile-web-app-capable" content="yes">
 <style>
   :root{
-    --paper:#F7F5EF;
+    color-scheme:light;
+    --paper:#F6F5F0;
+    --surface:#FFFFFF;
     --ink:#12321F;
+    --muted:#77877D;
+    --line:#E3DED2;
     --accent:#2F9E6E;
-    --accent-dim:#DCEFE3;
-    --warn:#C05B2E;
-    --muted:#8A9A8E;
-    --line:#D8D2C4;
-    --white:#FFFFFF;
+    --accent-dim:#E1F1E7;
+    --on-accent:#FFFFFF;
+    --hero:#12321F;
+    --on-hero:#F6F5F0;
+    --pos:#1E7B50;
+    --warn:#B9531F;
+    --warn-dim:#F8E6DC;
+    --shadow:0 1px 2px rgba(18,40,30,.04), 0 6px 18px rgba(18,40,30,.05);
+    --safe-top:env(safe-area-inset-top, 0px);
+    --safe-bottom:env(safe-area-inset-bottom, 0px);
   }
+  body.book-luong{
+    --paper:#F2F5FA;
+    --ink:#132840;
+    --muted:#738196;
+    --line:#DCE2EC;
+    --accent:#2F6EA6;
+    --accent-dim:#E0EAF6;
+    --hero:#132840;
+    --on-hero:#F2F5FA;
+  }
+  body.book-tong{
+    --paper:#F5F3F8;
+    --ink:#231A33;
+    --muted:#80778F;
+    --line:#E2DCEA;
+    --accent:#6B4FA0;
+    --accent-dim:#ECE6F6;
+    --hero:#231A33;
+    --on-hero:#F5F3F8;
+  }
+  /* Chế độ tối theo cài đặt của máy */
+  @media (prefers-color-scheme: dark){
+    :root{
+      color-scheme:dark;
+      --paper:#0E1411;
+      --surface:#17201B;
+      --ink:#E6EFE9;
+      --muted:#8C9C92;
+      --line:#26312B;
+      --accent:#43C28A;
+      --accent-dim:#1B3428;
+      --on-accent:#06120C;
+      --hero:#163527;
+      --on-hero:#E8F5EE;
+      --pos:#55CC93;
+      --warn:#F2915F;
+      --warn-dim:#3A2318;
+      --shadow:none;
+    }
+    body.book-luong{
+      --paper:#0D121A;
+      --surface:#161F2C;
+      --ink:#E3EAF5;
+      --muted:#8A97AA;
+      --line:#243044;
+      --accent:#64A4EA;
+      --accent-dim:#1A2C44;
+      --on-accent:#07111E;
+      --hero:#162C48;
+      --on-hero:#E6EEF9;
+    }
+    body.book-tong{
+      --paper:#120F18;
+      --surface:#1D1826;
+      --ink:#ECE6F5;
+      --muted:#988FA8;
+      --line:#30283D;
+      --accent:#A88BE3;
+      --accent-dim:#2C2342;
+      --on-accent:#120A1F;
+      --hero:#2A2042;
+      --on-hero:#F0EAFA;
+    }
+  }
+
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{
     margin:0;
     background:var(--paper);
     color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
     min-height:100vh;
-    padding-bottom:40px;
+    padding-bottom:calc(120px + var(--safe-bottom));
     transition:background .2s ease;
   }
-  body.book-luong{
-    --paper:#EDF2FA;
-    --accent:#2F6EA6;
-    --accent-dim:#DCE7F5;
-    --ink:#132840;
-  }
-  body.book-tong{
-    --paper:#F3F0F7;
-    --accent:#6B4FA0;
-    --accent-dim:#E6DFF2;
-    --ink:#231A33;
-  }
-  /* Tab Tổng chỉ để xem, thêm giao dịch ở từng sổ */
-  body.book-tong .fab, body.book-tong .fab-scan{display:none;}
-  /* Kỳ đã quyết toán chỉ để xem lại, giao dịch mới luôn vào kỳ hiện tại */
+  button{font-family:inherit;}
+  .app{max-width:560px; margin:0 auto;}
+  /* Tab Tổng và kỳ đã quyết toán chỉ để xem, thêm giao dịch ở kỳ hiện tại của từng sổ */
+  body.book-tong .fab, body.book-tong .fab-scan,
   body.past-period .fab, body.past-period .fab-scan{display:none;}
 
-  .period-bar{
-    display:none;
-    margin:12px 20px 0;
-  }
-  .period-bar.open{display:block;}
-  .period-bar select{
-    width:100%;
-    padding:10px 12px;
-    border-radius:10px;
-    border:1px solid var(--line);
-    background:var(--white);
-    font-size:14px;
-    font-weight:600;
-    color:var(--ink);
-  }
-  .sheet-text{color:var(--muted); font-size:14px; line-height:1.6; margin:0 0 16px;}
-  .settle-summary{
-    background:var(--white);
-    border:1px solid var(--line);
-    border-radius:12px;
-    padding:4px 14px;
-    margin-bottom:16px;
-  }
-  .settle-summary .line{
-    display:flex;
-    justify-content:space-between;
-    gap:12px;
-    padding:10px 0;
-    font-size:14px;
-    border-bottom:1px dashed var(--line);
-  }
-  .settle-summary .line:last-child{border-bottom:none; font-weight:700;}
-  .settle-summary .line span:first-child{color:var(--muted);}
-  .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; font-variant-numeric: tabular-nums;}
+  /* Số tiền: font thường, chữ số đều nhau để thẳng cột */
+  .num{font-variant-numeric:tabular-nums; letter-spacing:-.01em; white-space:nowrap;}
+  .cur{font-size:.7em; font-weight:600; margin-left:.2em; opacity:.7;}
 
   header{
-    padding:28px 20px 20px;
-    position:relative;
-  }
-  header::after{
-    content:"";
-    position:absolute;
-    left:20px; right:20px; bottom:0;
-    height:1px;
-    background:repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px);
+    padding:calc(20px + var(--safe-top)) 20px 0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
   }
   .eyebrow{
     font-size:12px;
-    letter-spacing:.12em;
-    text-transform:uppercase;
+    font-weight:500;
     color:var(--muted);
-    margin:0 0 4px;
+    margin:0 0 2px;
   }
   h1{
     margin:0;
-    font-size:22px;
+    font-size:24px;
     font-weight:700;
+    letter-spacing:-.02em;
   }
   .header-icon-btn{
-    position:absolute;
-    right:20px; top:24px;
-    width:36px; height:36px;
-    border-radius:50%;
+    flex:none;
+    width:40px; height:40px;
+    border-radius:12px;
     border:1px solid var(--line);
-    background:var(--white);
+    background:var(--surface);
     color:var(--ink);
     display:flex; align-items:center; justify-content:center;
     cursor:pointer;
   }
 
-  .menu-row{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    width:100%;
-    padding:14px;
-    border-radius:12px;
-    border:1px solid var(--line);
-    background:var(--white);
-    color:var(--ink);
-    font-size:14px;
-    font-weight:600;
-    text-align:left;
-    margin-bottom:10px;
-    cursor:pointer;
-  }
-  .menu-row svg{flex:none; color:var(--accent);}
-  .menu-row .menu-sub{
-    display:block;
-    font-size:12px;
-    font-weight:400;
-    color:var(--muted);
-    margin-top:2px;
-  }
-
+  /* Nút chuyển dạng phân đoạn: tab sổ, lọc loại, loại trong form */
   .book-tabs{
     display:flex;
     gap:4px;
-    margin:20px 20px 0;
-    background:var(--white);
+    background:var(--surface);
     border:1px solid var(--line);
-    border-radius:12px;
+    border-radius:14px;
     padding:4px;
   }
   .book-tab{
     flex:1;
     border:none;
     background:transparent;
-    padding:10px;
-    border-radius:9px;
+    padding:9px 8px;
+    border-radius:10px;
     font-size:14px;
     font-weight:600;
     color:var(--muted);
     cursor:pointer;
+    transition:background .15s ease, color .15s ease;
   }
   .book-tab.active{
     background:var(--accent);
-    color:var(--white);
+    color:var(--on-accent);
+  }
+  #bookTabs{margin:18px 20px 0;}
+  .seg-sm{border-radius:12px; padding:3px;}
+  .seg-sm .book-tab{padding:7px 8px; font-size:13px; border-radius:9px;}
+  .seg-sm .book-tab.active{background:var(--accent-dim); color:var(--ink);}
+  .type-tabs{margin:0 0 16px;}
+
+  .period-bar{display:none; margin:12px 20px 0;}
+  .period-bar.open{display:block;}
+  .period-bar select{
+    width:100%;
+    -webkit-appearance:none;
+    appearance:none;
+    padding:11px 40px 11px 14px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A9A8E' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 14px center / 16px;
+    font-size:14px;
+    font-weight:600;
+    color:var(--ink);
   }
 
   .total-card{
-    margin:16px 20px 0;
-    background:var(--ink);
-    color:var(--paper);
-    border-radius:18px;
-    padding:22px 20px;
+    margin:14px 20px 0;
+    background:var(--hero);
+    color:var(--on-hero);
+    border-radius:22px;
+    padding:20px;
     position:relative;
     overflow:hidden;
   }
-  .total-card .label{
+  .total-card::after{
+    content:"";
+    position:absolute;
+    right:-70px; top:-70px;
+    width:200px; height:200px;
+    border-radius:50%;
+    background:var(--accent);
+    opacity:.22;
+    pointer-events:none;
+  }
+  .total-card > *{position:relative; z-index:1;}
+  .total-top{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .total-card .label{font-size:13px; font-weight:500; opacity:.75;}
+  .count-pill{
+    flex:none;
     font-size:12px;
-    letter-spacing:.1em;
-    text-transform:uppercase;
-    opacity:.65;
-    margin-bottom:6px;
+    padding:3px 10px;
+    border-radius:999px;
+    background:rgba(255,255,255,.12);
   }
   .total-card .amount{
-    font-size:34px;
+    margin-top:6px;
+    font-size:36px;
     font-weight:700;
-    letter-spacing:-0.01em;
+    letter-spacing:-.02em;
+    line-height:1.15;
   }
-  .total-card .amount.neg{color:#F2A07B;}
-  .total-card .sub{
-    margin-top:10px;
-    font-size:13px;
-    opacity:.7;
-    display:flex;
-    flex-wrap:wrap;
-    gap:4px 12px;
-    justify-content:space-between;
+  .total-card .amount.neg{color:#F6A882;}
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
+  .stat{background:rgba(255,255,255,.08); border-radius:14px; padding:10px 12px; min-width:0;}
+  .stat-k{display:flex; align-items:center; gap:6px; font-size:12px; opacity:.8;}
+  .stat-ic{
+    width:18px; height:18px;
+    border-radius:6px;
+    display:flex; align-items:center; justify-content:center;
   }
+  .stat-ic.in{background:rgba(127,224,174,.18); color:#8FE6B8;}
+  .stat-ic.out{background:rgba(246,168,130,.18); color:#F6A882;}
+  .stat-v{margin-top:4px; font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis;}
+  .breakdown{margin-top:10px; font-size:12px; opacity:.7;}
 
-  .type-tabs{margin:0 0 16px;}
-  .chip-sep{flex:none; width:1px; margin:4px 2px; background:var(--line);}
-
-  .filter-row{
+  .filters{margin:18px 20px 0;}
+  .chip-row{
     display:flex;
     gap:8px;
-    margin:16px 20px 0;
+    margin-top:10px;
     overflow-x:auto;
+    scrollbar-width:none;
     padding-bottom:2px;
   }
+  .chip-row::-webkit-scrollbar{display:none;}
   .chip{
     flex:none;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
     font-size:13px;
+    font-weight:500;
     padding:7px 14px;
     border-radius:999px;
     border:1px solid var(--line);
-    background:var(--white);
+    background:var(--surface);
     color:var(--ink);
     cursor:pointer;
   }
   .chip.active{
-    background:var(--accent);
+    background:var(--accent-dim);
     border-color:var(--accent);
-    color:var(--white);
     font-weight:600;
-  }
-  .chip.search-toggle{
-    display:flex;
-    align-items:center;
-    gap:4px;
   }
 
   .range-bar{
@@ -245,119 +285,140 @@
   .range-bar input[type=date]{
     flex:1;
     min-width:130px;
-    padding:8px 10px;
+    padding:9px 10px;
     border-radius:10px;
     border:1px solid var(--line);
-    background:var(--white);
-    font-size:13px;
+    background:var(--surface);
+    font-size:14px;
     color:var(--ink);
   }
   .range-bar .sep{color:var(--muted); font-size:13px; flex:none;}
   .range-btn{
     flex:none;
-    padding:8px 14px;
+    padding:9px 14px;
     border-radius:10px;
     border:none;
     background:var(--accent);
-    color:var(--white);
+    color:var(--on-accent);
     font-size:13px;
     font-weight:600;
     cursor:pointer;
   }
   .range-btn-ghost{
-    background:var(--white);
+    background:var(--surface);
     color:var(--ink);
     border:1px solid var(--line);
   }
 
-  .list{
-    margin:18px 20px 0;
-    background:var(--white);
+  /* Danh sách nhóm theo ngày */
+  .list{margin:4px 20px 0;}
+  .group-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:12px;
+    padding:18px 4px 8px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+  }
+  .group-card{
+    background:var(--surface);
+    border:1px solid var(--line);
     border-radius:16px;
     overflow:hidden;
-    border:1px solid var(--line);
-  }
-  .empty{
-    padding:36px 20px;
-    text-align:center;
-    color:var(--muted);
-    font-size:14px;
-    line-height:1.6;
+    box-shadow:var(--shadow);
   }
   .row{
     display:flex;
     align-items:center;
     gap:12px;
-    padding:14px 16px;
-    border-bottom:1px dashed var(--line);
+    padding:13px 14px;
     position:relative;
+    cursor:pointer;
   }
-  .row:last-child{border-bottom:none;}
-  .row .dot{
-    width:36px; height:36px; border-radius:50%;
+  .row + .row::before{
+    content:"";
+    position:absolute;
+    left:64px; right:0; top:0;
+    height:1px;
+    background:var(--line);
+  }
+  .row:active{background:var(--accent-dim);}
+  .avatar{
+    width:38px; height:38px;
+    border-radius:12px;
     background:var(--accent-dim);
     color:var(--accent);
     display:flex; align-items:center; justify-content:center;
-    font-weight:700; font-size:14px;
+    font-weight:700; font-size:15px;
     flex:none;
   }
-  .row .info{flex:1; min-width:0;}
-  .row .name{font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .row .meta{font-size:12.5px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .row .amt{font-weight:700; font-size:15px; flex:none; text-align:right;}
-  .row.out .dot{background:#F6E3D9; color:var(--warn);}
+  .row.out .avatar{background:var(--warn-dim); color:var(--warn);}
+  .info{flex:1; min-width:0;}
+  .name{font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .meta{font-size:12.5px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .amt{font-weight:700; font-size:15px; flex:none; text-align:right; color:var(--pos);}
   .row.out .amt{color:var(--warn);}
-  .row .del{
-    flex:none;
-    width:28px; height:28px;
-    border-radius:50%;
-    border:none;
-    background:transparent;
+
+  .empty{
+    margin-top:16px;
+    padding:36px 24px;
+    text-align:center;
     color:var(--muted);
-    font-size:16px;
-    display:flex; align-items:center; justify-content:center;
-    cursor:pointer;
+    font-size:14px;
+    line-height:1.6;
+    background:var(--surface);
+    border:1px dashed var(--line);
+    border-radius:16px;
   }
-  .row .del:active{background:#F0E9E4; color:var(--warn);}
-
-  .fab{
-    position:fixed;
-    right:20px; bottom:20px;
-    width:58px; height:58px;
-    border-radius:50%;
-    background:var(--accent);
-    color:var(--white);
-    border:none;
-    font-size:28px;
-    box-shadow:0 8px 20px rgba(47,158,110,.35);
+  .empty-icon{
+    width:52px; height:52px;
+    margin:0 auto 12px;
+    border-radius:16px;
+    background:var(--accent-dim);
+    color:var(--accent);
     display:flex; align-items:center; justify-content:center;
-    cursor:pointer;
+  }
+
+  .fab-wrap{
+    position:fixed;
+    right:max(20px, calc(50% - 260px));
+    bottom:calc(20px + var(--safe-bottom));
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
     z-index:20;
   }
-  .fab:active{transform:scale(.94);}
-
-  .fab-scan{
-    position:fixed;
-    right:20px; bottom:90px;
-    width:58px; height:58px;
+  .fab, .fab-scan{
+    border:none;
     padding:0;
-    border-radius:50%;
-    background:var(--accent);
-    color:var(--white);
-    border:none;
-    font-size:24px;
-    line-height:1;
-    box-shadow:0 8px 20px rgba(47,158,110,.35);
     display:flex; align-items:center; justify-content:center;
     cursor:pointer;
-    z-index:20;
+    transition:transform .1s ease;
   }
-  .fab-scan:active{transform:scale(.94);}
+  .fab{
+    width:58px; height:58px;
+    border-radius:18px;
+    background:var(--accent);
+    color:var(--on-accent);
+    box-shadow:0 10px 24px rgba(0,0,0,.18);
+  }
+  .fab-scan{
+    width:48px; height:48px;
+    border-radius:15px;
+    background:var(--surface);
+    color:var(--accent);
+    border:1px solid var(--line);
+    box-shadow:0 4px 14px rgba(0,0,0,.10);
+  }
+  .fab:active, .fab-scan:active{transform:scale(.94);}
   .fab-scan.loading{opacity:.55; pointer-events:none;}
 
   .sheet-backdrop{
     position:fixed; inset:0;
-    background:rgba(18,50,31,.4);
+    background:rgba(8,15,12,.45);
     opacity:0; pointer-events:none;
     transition:opacity .2s ease;
     z-index:30;
@@ -366,32 +427,41 @@
   .sheet{
     position:fixed;
     left:0; right:0; bottom:0;
+    margin:0 auto;
+    max-width:560px;
     background:var(--paper);
-    border-radius:20px 20px 0 0;
-    padding:20px 20px 28px;
+    border-radius:24px 24px 0 0;
+    padding:10px 20px calc(24px + var(--safe-bottom));
     transform:translateY(100%);
     transition:transform .25s ease;
     z-index:31;
     max-height:88vh;
     overflow-y:auto;
   }
+  .sheet::before{
+    content:"";
+    display:block;
+    width:40px; height:4px;
+    border-radius:2px;
+    background:var(--line);
+    margin:0 auto 14px;
+  }
   .sheet.open{transform:translateY(0);}
-  .sheet h2{margin:0 0 16px; font-size:17px;}
+  .sheet h2{margin:0 0 16px; font-size:18px; letter-spacing:-.01em;}
   .field{margin-bottom:14px;}
   .field label{
     display:block;
-    font-size:12px;
+    font-size:13px;
+    font-weight:500;
     color:var(--muted);
     margin-bottom:6px;
-    text-transform:uppercase;
-    letter-spacing:.06em;
   }
   .field input{
     width:100%;
     padding:12px 14px;
-    border-radius:10px;
+    border-radius:12px;
     border:1px solid var(--line);
-    background:var(--white);
+    background:var(--surface);
     font-size:16px;
     color:var(--ink);
   }
@@ -410,14 +480,72 @@
     font-weight:600;
     cursor:pointer;
   }
-  .btn-primary{background:var(--accent); color:var(--white);}
-  .btn-primary:active{background:#26825c;}
-  .btn-ghost{background:var(--white); color:var(--ink); border:1px solid var(--line);}
+  .btn-primary{background:var(--accent); color:var(--on-accent);}
+  .btn-primary:active{filter:brightness(.92);}
+  .btn-ghost{background:var(--surface); color:var(--ink); border:1px solid var(--line);}
+  .btn-danger-text{
+    display:block;
+    width:100%;
+    margin-top:12px;
+    padding:12px;
+    border:none;
+    background:transparent;
+    color:var(--warn);
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+  }
+
+  .menu-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    width:100%;
+    padding:14px;
+    border-radius:14px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    font-size:14px;
+    font-weight:600;
+    text-align:left;
+    margin-bottom:10px;
+    cursor:pointer;
+  }
+  .menu-row svg{flex:none; color:var(--accent);}
+  .menu-row .menu-sub{
+    display:block;
+    font-size:12px;
+    font-weight:400;
+    color:var(--muted);
+    margin-top:2px;
+  }
+
+  .sheet-text{color:var(--muted); font-size:14px; line-height:1.6; margin:0 0 16px;}
+  .settle-summary{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:4px 14px;
+    margin-bottom:16px;
+  }
+  .settle-summary .line{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 0;
+    font-size:14px;
+    border-bottom:1px solid var(--line);
+  }
+  .settle-summary .line:last-child{border-bottom:none; font-weight:700;}
+  .settle-summary .line span:first-child{color:var(--muted);}
 
   .toast{
     position:fixed;
-    left:50%; bottom:90px;
+    left:50%;
+    bottom:calc(96px + var(--safe-bottom));
     transform:translateX(-50%) translateY(20px);
+    max-width:calc(100% - 40px);
     background:var(--ink);
     color:var(--paper);
     padding:10px 18px;
@@ -433,9 +561,12 @@
 </head>
 <body>
 
+<div class="app">
 <header>
-  <p class="eyebrow">Cá nhân · lưu trên máy này</p>
-  <h1>Sổ thu tiền</h1>
+  <div>
+    <p class="eyebrow">Cá nhân · lưu trên máy này</p>
+    <h1>Sổ thu tiền</h1>
+  </div>
   <button class="header-icon-btn" id="settingsBtn" aria-label="Quản lý sổ">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
   </button>
@@ -452,18 +583,38 @@
 </div>
 
 <div class="total-card">
-  <div class="label" id="totalLabel">Tổng đã nhận</div>
-  <div class="amount mono" id="totalAmount">0 ₫</div>
-  <div class="sub">
-    <span id="inLabel"></span>
-    <span id="outLabel"></span>
+  <div class="total-top">
+    <span class="label" id="totalLabel">Số dư</span>
+    <span class="count-pill" id="countLabel">0 giao dịch</span>
   </div>
-  <div class="sub">
-    <span id="countLabel">0 giao dịch</span>
+  <div class="amount num" id="totalAmount">0 ₫</div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-k">
+        <span class="stat-ic in"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"></line><polyline points="17 17 7 17 7 7"></polyline></svg></span>
+        Thu
+      </div>
+      <div class="stat-v num" id="inLabel"></div>
+    </div>
+    <div class="stat">
+      <div class="stat-k">
+        <span class="stat-ic out"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></span>
+        Rút
+      </div>
+      <div class="stat-v num" id="outLabel"></div>
+    </div>
   </div>
+  <div class="breakdown" id="breakdown" style="display:none;"></div>
 </div>
 
-<div class="filter-row" id="filterRow"></div>
+<div class="filters">
+  <div class="book-tabs seg-sm" id="typeFilter">
+    <button class="book-tab active" data-type="all">Tất cả</button>
+    <button class="book-tab" data-type="in">Tiền vào</button>
+    <button class="book-tab" data-type="out">Tiền rút</button>
+  </div>
+  <div class="chip-row" id="filterRow"></div>
+</div>
 
 <div class="range-bar" id="rangeBar">
   <input type="date" id="rangeFrom" aria-label="Từ ngày">
@@ -474,12 +625,17 @@
 </div>
 
 <div class="list" id="list"></div>
+</div>
 
 <input type="file" id="scanInput" accept="image/*" style="display:none">
-<button class="fab-scan" id="scanBtn" aria-label="Quét ảnh giao dịch">
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-</button>
-<button class="fab" id="addBtn" aria-label="Thêm giao dịch">+</button>
+<div class="fab-wrap">
+  <button class="fab-scan" id="scanBtn" aria-label="Quét ảnh giao dịch">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+  </button>
+  <button class="fab" id="addBtn" aria-label="Thêm giao dịch">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+  </button>
+</div>
 
 <div class="sheet-backdrop" id="backdrop"></div>
 <div class="sheet" id="sheet">
@@ -508,6 +664,7 @@
     <button class="btn btn-ghost" id="cancelBtn">Hủy</button>
     <button class="btn btn-primary" id="saveBtn">Lưu</button>
   </div>
+  <button class="btn-danger-text" id="deleteBtn" style="display:none;">Xóa giao dịch</button>
 </div>
 
 <div class="sheet-backdrop" id="settingsBackdrop"></div>
@@ -683,6 +840,10 @@ const storage = {
 function fmtVND(n){
   return new Intl.NumberFormat('vi-VN').format(n) + ' \u20AB';
 }
+// B\u1EA3n HTML c\u1EE7a s\u1ED1 ti\u1EC1n: k\u00FD hi\u1EC7u \u20AB nh\u1ECF h\u01A1n s\u1ED1 cho d\u1EC5 \u0111\u1ECDc
+function moneyHTML(n, sign = ''){
+  return `${sign}${new Intl.NumberFormat('vi-VN').format(n)}<span class="cur">\u20AB</span>`;
+}
 function initials(name){
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if(parts.length === 0) return '?';
@@ -707,11 +868,20 @@ function monthLabel(key){
   const [y,m] = key.split('-');
   return `Th ${parseInt(m,10)}/${y}`;
 }
-function todayISO(){
+function todayISO(daysAgo = 0){
   const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
   const off = d.getTimezoneOffset();
   const local = new Date(d.getTime() - off*60000);
   return local.toISOString().slice(0,10);
+}
+const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+function dayLabel(iso){
+  if(!iso) return 'Không rõ ngày';
+  if(iso === todayISO()) return 'Hôm nay';
+  if(iso === todayISO(1)) return 'Hôm qua';
+  const [y,m,d] = iso.split('-').map(Number);
+  return `${WEEKDAYS[new Date(y, m-1, d).getDay()]}, ${fmtDateShort(iso)}`;
 }
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -722,10 +892,11 @@ function showToast(msg){
 }
 
 let confirmResolve = null;
-function showConfirm(msg){
+function showConfirm(msg, okLabel = 'Đồng ý'){
   return new Promise(resolve => {
     confirmResolve = resolve;
     document.getElementById('confirmMsg').textContent = msg;
+    document.getElementById('confirmOkBtn').textContent = okLabel;
     document.getElementById('confirmBackdrop').classList.add('open');
     document.getElementById('confirmSheet').classList.add('open');
   });
@@ -1016,7 +1187,7 @@ function openSettle(){
     ['Tổng quyết toán', fmtVND(balanceOf(all))],
   ];
   document.getElementById('settleSummary').innerHTML = lines
-    .map(([k, v]) => `<div class="line"><span>${k}</span><span class="mono">${v}</span></div>`).join('');
+    .map(([k, v]) => `<div class="line"><span>${k}</span><span class="num">${v}</span></div>`).join('');
   document.getElementById('settleBackdrop').classList.add('open');
   document.getElementById('settleSheet').classList.add('open');
 }
@@ -1110,6 +1281,8 @@ function openSheet(edit, type = 'in'){
     document.getElementById('fDate').value = edit.date;
     document.getElementById('fNote').value = edit.note || '';
   }
+  // Xóa nằm trong form sửa thay vì nút ✕ ở từng dòng, tránh bấm nhầm
+  document.getElementById('deleteBtn').style.display = edit ? '' : 'none';
   setFormType(type);
   document.getElementById('backdrop').classList.add('open');
   document.getElementById('sheet').classList.add('open');
@@ -1157,46 +1330,69 @@ async function handleSave(){
 }
 
 async function handleDelete(id){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  const ok = await showConfirm(`Xóa "${item.name}" (${fmtVND(item.amount)})? Không thể hoàn tác.`, 'Xóa');
+  if(!ok) return;
   items = items.filter(i => i.id !== id);
   await saveItems();
+  closeSheet();
   render();
   showToast('Đã xóa');
 }
 
-function render(){
-  const shown = periodItems();
-  // filters (by month)
-  const months = Array.from(new Set(shown.map(i => monthKey(i.date))))
-    .sort((a,b) => b.localeCompare(a));
+const ICON_OUT = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>';
+const ICON_EMPTY = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>';
+const ICON_CAL = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>';
+
+function renderFilters(months){
+  document.querySelectorAll('#typeFilter .book-tab').forEach(b => b.classList.toggle('active', b.dataset.type === typeFilter));
   const filterRow = document.getElementById('filterRow');
   filterRow.innerHTML = '';
-  [['in', 'Thu'], ['out', 'Rút']].forEach(([t, label]) => {
+  const addChip = (label, active, onclick) => {
     const chip = document.createElement('button');
-    chip.className = 'chip' + (typeFilter === t ? ' active' : '');
-    chip.textContent = label;
-    chip.onclick = () => { typeFilter = typeFilter === t ? 'all' : t; render(); };
+    chip.className = 'chip' + (active ? ' active' : '');
+    chip.innerHTML = label;
+    chip.onclick = onclick;
     filterRow.appendChild(chip);
-  });
-  const sep = document.createElement('span');
-  sep.className = 'chip-sep';
-  filterRow.appendChild(sep);
-  const allChip = document.createElement('button');
-  allChip.className = 'chip' + (activeFilter === 'all' ? ' active' : '');
-  allChip.textContent = 'Tất cả';
-  allChip.onclick = () => { activeFilter = 'all'; document.getElementById('rangeBar').classList.remove('open'); render(); };
-  filterRow.appendChild(allChip);
-  months.forEach(mk => {
-    const chip = document.createElement('button');
-    chip.className = 'chip' + (activeFilter === mk ? ' active' : '');
-    chip.textContent = monthLabel(mk);
-    chip.onclick = () => { activeFilter = mk; document.getElementById('rangeBar').classList.remove('open'); render(); };
-    filterRow.appendChild(chip);
-  });
-  const searchChip = document.createElement('button');
-  searchChip.className = 'chip search-toggle' + (activeFilter === 'range' ? ' active' : '');
-  searchChip.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>Tìm theo ngày</span>';
-  searchChip.onclick = () => document.getElementById('rangeBar').classList.toggle('open');
-  filterRow.appendChild(searchChip);
+  };
+  const pickMonth = mk => () => { activeFilter = mk; document.getElementById('rangeBar').classList.remove('open'); render(); };
+  addChip('Mọi tháng', activeFilter === 'all', pickMonth('all'));
+  // Đặt trước các tháng để không bị khuất khi có nhiều tháng
+  const rangeText = activeFilter === 'range' && dateRange
+    ? `${fmtDateShort(dateRange.from).slice(0,5)} – ${fmtDateShort(dateRange.to).slice(0,5)}`
+    : 'Khoảng ngày';
+  addChip(`${ICON_CAL}<span>${rangeText}</span>`, activeFilter === 'range',
+    () => document.getElementById('rangeBar').classList.toggle('open'));
+  months.forEach(mk => addChip(monthLabel(mk), activeFilter === mk, pickMonth(mk)));
+}
+
+function renderRow(item){
+  const row = document.createElement('div');
+  const out = isOut(item);
+  row.className = 'row' + (out ? ' out' : '');
+  const meta = [];
+  if(item._book) meta.push(`Sổ ${BOOKS[item._book].title}`);
+  if(item.note) meta.push(escapeHtml(item.note));
+  if(!meta.length) meta.push(out ? 'Rút tiền' : 'Tiền vào');
+  row.innerHTML = `
+    <div class="avatar">${out ? ICON_OUT : escapeHtml(initials(item.name))}</div>
+    <div class="info">
+      <div class="name">${escapeHtml(item.name)}</div>
+      <div class="meta">${meta.join(' · ')}</div>
+    </div>
+    <div class="amt num">${moneyHTML(item.amount, out ? '−' : '+')}</div>
+  `;
+  // Ở tab Tổng, bấm vào dòng sẽ chuyển sang đúng sổ và mở form sửa
+  row.addEventListener('click', isSummary() ? () => openInBook(item._book, item.id) : () => openSheet(item));
+  return row;
+}
+
+function render(){
+  const shown = periodItems();
+  const months = Array.from(new Set(shown.map(i => monthKey(i.date))))
+    .sort((a,b) => b.localeCompare(a));
+  renderFilters(months);
 
   let filtered;
   if(activeFilter === 'range' && dateRange){
@@ -1212,19 +1408,22 @@ function render(){
 
   const total = typeFilter === 'in' ? tin : typeFilter === 'out' ? tout : tin - tout;
   const amountEl = document.getElementById('totalAmount');
-  amountEl.textContent = fmtVND(total);
+  amountEl.innerHTML = moneyHTML(total);
   amountEl.classList.toggle('neg', total < 0);
+  document.getElementById('inLabel').innerHTML = moneyHTML(tin);
+  document.getElementById('outLabel').innerHTML = moneyHTML(tout);
+  const breakdown = document.getElementById('breakdown');
   if(isSummary()){
     const fromBook = b => sumAmount(filtered.filter(i => i._book === b && !isOut(i)));
-    document.getElementById('inLabel').textContent = `↓ Thu tiền ${fmtVND(fromBook('thu'))} · Lương ${fmtVND(fromBook('luong'))}`;
+    breakdown.textContent = `Thu gồm: Sổ ${BOOKS.thu.title} ${fmtVND(fromBook('thu'))} · Sổ ${BOOKS.luong.title} ${fmtVND(fromBook('luong'))}`;
+    breakdown.style.display = '';
   } else {
-    document.getElementById('inLabel').textContent = `↓ Thu ${fmtVND(tin)}`;
+    breakdown.style.display = 'none';
   }
-  document.getElementById('outLabel').textContent = `↑ Rút ${fmtVND(tout)}`;
   document.getElementById('countLabel').textContent = `${filtered.length} giao dịch`;
   let totalLabelText = typeFilter === 'in' ? 'Tổng thu' : typeFilter === 'out' ? 'Tổng rút' : viewCfg().totalLabel;
   if(activeFilter === 'range' && dateRange){
-    totalLabelText += ` ${fmtDateShort(dateRange.from)} - ${fmtDateShort(dateRange.to)}`;
+    totalLabelText += ` ${fmtDateShort(dateRange.from)} – ${fmtDateShort(dateRange.to)}`;
   } else if(activeFilter !== 'all'){
     totalLabelText += ` ${monthLabel(activeFilter)}`;
   }
@@ -1235,35 +1434,26 @@ function render(){
   if(filtered.length === 0){
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = settlements.length && !shown.length ? 'Chưa có giao dịch nào trong kỳ này.' : viewCfg().emptyText;
+    empty.innerHTML = `<div class="empty-icon">${ICON_EMPTY}</div>`;
+    empty.append(settlements.length && !shown.length ? 'Chưa có giao dịch nào trong kỳ này.' : viewCfg().emptyText);
     list.appendChild(empty);
     return;
   }
+  // Nhóm theo ngày (danh sách đã sắp xếp mới nhất trước), kèm tổng thu - rút của ngày
+  let card = null, lastDate = null;
   filtered.forEach(item => {
-    const row = document.createElement('div');
-    const out = isOut(item);
-    row.className = 'row' + (out ? ' out' : '');
-    row.innerHTML = `
-      <div class="dot">${out ? '↑' : initials(item.name)}</div>
-      <div class="info">
-        <div class="name">${escapeHtml(item.name)}</div>
-        <div class="meta">${item._book ? BOOKS[item._book].title + ' · ' : ''}${fmtDateShort(item.date)}${item.note ? ' · ' + escapeHtml(item.note) : ''}</div>
-      </div>
-      <div class="amt mono">${out ? '−' : ''}${fmtVND(item.amount)}</div>
-      ${isSummary() ? '' : '<button class="del" aria-label="Xóa">✕</button>'}
-    `;
-    // Ở tab Tổng, bấm vào dòng sẽ chuyển sang đúng sổ và mở form sửa
-    const open = isSummary() ? () => openInBook(item._book, item.id) : () => openSheet(item);
-    row.querySelector('.info').addEventListener('click', open);
-    row.querySelector('.dot').addEventListener('click', open);
-    row.querySelector('.amt').addEventListener('click', open);
-    if(!isSummary()){
-      row.querySelector('.del').addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleDelete(item.id);
-      });
+    if(!card || item.date !== lastDate){
+      lastDate = item.date;
+      const dayItems = filtered.filter(i => i.date === lastDate);
+      const net = sumAmount(dayItems.filter(i => !isOut(i))) - sumAmount(dayItems.filter(isOut));
+      const head = document.createElement('div');
+      head.className = 'group-head';
+      head.innerHTML = `<span>${dayLabel(lastDate)}</span><span class="num">${moneyHTML(Math.abs(net), net < 0 ? '−' : '+')}</span>`;
+      card = document.createElement('div');
+      card.className = 'group-card';
+      list.append(head, card);
     }
-    list.appendChild(row);
+    card.appendChild(renderRow(item));
   });
 }
 
@@ -1284,6 +1474,10 @@ document.getElementById('addBtn').addEventListener('click', () => openSheet(null
 document.getElementById('cancelBtn').addEventListener('click', closeSheet);
 document.getElementById('backdrop').addEventListener('click', closeSheet);
 document.getElementById('saveBtn').addEventListener('click', handleSave);
+document.getElementById('deleteBtn').addEventListener('click', () => { if(editingId) handleDelete(editingId); });
+document.querySelectorAll('#typeFilter .book-tab').forEach(btn => {
+  btn.addEventListener('click', () => { typeFilter = btn.dataset.type; render(); });
+});
 document.getElementById('scanBtn').addEventListener('click', () => document.getElementById('scanInput').click());
 document.getElementById('scanInput').addEventListener('change', (e) => {
   const file = e.target.files[0];
