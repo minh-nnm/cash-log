@@ -1075,7 +1075,7 @@
 <div class="sheet-backdrop" id="resultBackdrop"></div>
 <div class="sheet" id="resultSheet">
   <h2 id="resultTitle">Đã quyết toán</h2>
-  <p class="sheet-text">File sao lưu đã được tải về máy. Gửi bản tóm tắt cho người cùng quyết toán qua Zalo, Messenger…</p>
+  <p class="sheet-text">File sao lưu đã được tải về máy. Gửi ảnh bảng giao dịch của kỳ này cho người cùng quyết toán qua Zalo, Messenger…</p>
   <div class="settle-summary" id="resultSummary"></div>
   <div class="sheet-actions">
     <button class="btn btn-ghost" id="resultCloseBtn">Đóng</button>
@@ -1744,6 +1744,7 @@ function resetFilters(){
 }
 
 function setViewPeriod(k){
+  shareImageCache.clear();
   viewPeriod = Math.min(Math.max(k, 0), settlements.length);
   resetFilters();
   // Chưa quyết toán lần nào thì không cần hiện nút chọn kỳ
@@ -1757,6 +1758,7 @@ function setViewPeriod(k){
   document.getElementById('unsettleBtn').style.display = last ? '' : 'none';
   document.getElementById('unsettleSub').textContent = last ? `Gộp kỳ hiện tại vào Kỳ ${settlements.length} (${fmtDateShort(last.from)} – ${fmtDateShort(last.to)})` : '';
   loadItems();
+  if(isPastPeriod()) prepareShareImage(viewPeriod);
 }
 
 const balanceOf = list => sumAmount(list.filter(i => !isOut(i))) - sumAmount(list.filter(isOut));
@@ -1865,11 +1867,130 @@ async function copyText(text){
   }
 }
 // Mở bảng chia sẻ của máy (Zalo, Messenger...); máy không hỗ trợ thì sao chép để dán
+// Ảnh bảng giao dịch của 1 kỳ để gửi qua Zalo/Messenger (gửi chữ thì các cột bị lệch).
+// Luôn vẽ nền sáng cho dễ đọc; màu thu/rút dùng cặp màu đã kiểm tra trên nền trắng.
+const SHARE_FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+const SHARE_C = { bg: '#FFFFFF', band: '#12321F', onBand: '#F6F5F0', ink: '#12321F', muted: '#77877D', line: '#E3DED2', zebra: '#F7F6F1', in: '#1A6E47', out: '#D9773A' };
+function fitText(ctx, text, maxW){
+  if(ctx.measureText(text).width <= maxW) return text;
+  let t = text;
+  while(t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+function buildShareImage(k){
+  const sum = periodSummary(k);
+  const sections = Object.keys(BOOKS).map(book => ({
+    book,
+    list: readBook(book).filter(i => periodOf(i) === k)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id)),
+  })).filter(s => s.list.length);
+  const W = 540, pad = 24, rowH = 34, headH = 92, secTop = 58, subH = 82, footH = 96, MAX_H = 15000;
+  // Kỳ quá dài thì cắt bớt dòng (ảnh quá cao điện thoại không vẽ được), báo số dòng còn lại
+  const fixed = headH + footH + sections.length * (secTop + subH + 16 + rowH);
+  const allowed = Math.max(10, Math.floor((MAX_H - fixed) / rowH));
+  let left = allowed;
+  sections.forEach(s => { s.shown = s.list.slice(0, Math.max(0, left)); left -= s.shown.length; s.more = s.list.length - s.shown.length; });
+  const H = headH + footH + sections.reduce((h, s) => h + secTop + (s.shown.length + (s.more ? 1 : 0)) * rowH + subH + 16, 0);
+  const scale = Math.max(1, Math.min(2, Math.floor(16000 / H)));
+  const canvas = document.createElement('canvas');
+  canvas.width = W * scale; canvas.height = H * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const font = (size, weight = 400) => { ctx.font = `${weight} ${size}px ${SHARE_FONT}`; };
+  const text = (t, x, y, color, align = 'left') => { ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(t, x, y); };
+  const line = (y) => { ctx.fillStyle = SHARE_C.line; ctx.fillRect(pad, y, W - pad * 2, 1); };
+  const years = new Set(sections.flatMap(s => s.list.map(i => (i.date || '').slice(0, 4))));
+  const dateText = iso => { const d = fmtDateShort(iso); return years.size > 1 ? d.slice(0, 6) + d.slice(8) : d.slice(0, 5); };
+
+  ctx.fillStyle = SHARE_C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = SHARE_C.band; ctx.fillRect(0, 0, W, headH);
+  font(20, 700); text(`QUYẾT TOÁN KỲ ${k + 1}`, pad, 40, SHARE_C.onBand);
+  font(14); text(`${fmtDateShort(sum.from)} – ${fmtDateShort(sum.to)}`, pad, 66, SHARE_C.onBand);
+  font(13); text(`${sum.count} giao dịch`, W - pad, 40, SHARE_C.onBand, 'right');
+
+  let y = headH;
+  sections.forEach(s => {
+    const tin = sumAmount(s.list.filter(i => !isOut(i))), tout = sumAmount(s.list.filter(isOut));
+    y += 30; font(16, 700); text(`Sổ ${BOOKS[s.book].title}`, pad, y, SHARE_C.ink);
+    y += 22; font(12, 600);
+    text('Ngày', pad, y, SHARE_C.muted);
+    text(`${BOOKS[s.book].nameLabel} · Nội dung`, pad + 64, y, SHARE_C.muted);
+    text('Số tiền', W - pad, y, SHARE_C.muted, 'right');
+    y += 6; line(y);
+    s.shown.forEach((i, idx) => {
+      if(idx % 2) { ctx.fillStyle = SHARE_C.zebra; ctx.fillRect(pad, y + 1, W - pad * 2, rowH); }
+      const base = y + 22, out = isOut(i);
+      font(13); text(dateText(i.date), pad + 6, base, SHARE_C.muted);
+      font(14, 700);
+      const amt = `${out ? '−' : '+'}${fmtVND(i.amount)}`;
+      const amtW = ctx.measureText(amt).width;
+      text(amt, W - pad - 6, base, out ? SHARE_C.out : SHARE_C.in, 'right');
+      const nameX = pad + 64, nameMax = W - pad - 6 - amtW - 12 - nameX;
+      font(14, 600);
+      const name = fitText(ctx, i.name || '', nameMax);
+      text(name, nameX, base, SHARE_C.ink);
+      if(i.note){
+        const used = ctx.measureText(name).width;
+        font(13);
+        const rest = nameMax - used - 4;
+        if(rest > 30) text(fitText(ctx, ` · ${i.note}`, rest), nameX + used, base, SHARE_C.muted);
+      }
+      y += rowH;
+    });
+    if(s.more){ font(13); text(`… và ${s.more} giao dịch khác (xem file sao lưu CSV)`, pad + 6, y + 22, SHARE_C.muted); y += rowH; }
+    line(y + 1);
+    [['Thu', fmtVND(tin), 400], ['Rút', fmtVND(tout), 400], ['Còn lại', fmtVND(tin - tout), 700]].forEach(([k2, v, w], j) => {
+      const yy = y + 24 + j * 22;
+      font(13, w); text(k2, pad + 6, yy, w === 700 ? SHARE_C.ink : SHARE_C.muted);
+      font(14, w); text(v, W - pad - 6, yy, SHARE_C.ink, 'right');
+    });
+    y += subH + 16;
+  });
+
+  ctx.fillStyle = SHARE_C.band; ctx.fillRect(pad, y, W - pad * 2, 2);
+  font(13, 600); text('TỔNG CÒN LẠI', pad, y + 36, SHARE_C.muted);
+  font(24, 800); text(fmtVND(sum.left), W - pad, y + 40, SHARE_C.ink, 'right');
+  font(12); text(`Tạo từ Sổ thu tiền · ${fmtDateShort(todayISO())}`, pad, y + 74, SHARE_C.muted);
+  return new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+// Tạo sẵn ảnh khi bảng kết quả/dải kỳ cũ hiện ra, để lúc bấm Chia sẻ gọi được ngay
+// (iPhone chỉ cho mở bảng chia sẻ ngay sau khi bấm).
+const shareImageCache = new Map();
+function prepareShareImage(k){
+  if(!shareImageCache.has(k)) shareImageCache.set(k, buildShareImage(k).catch(() => null));
+  return shareImageCache.get(k);
+}
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// Gửi ảnh bảng giao dịch (kèm tóm tắt chữ) qua bảng chia sẻ của máy.
+// Máy không gửi được ảnh: tải ảnh về và sao chép tóm tắt; không tạo được ảnh: chia sẻ chữ như cũ.
 async function shareSettlement(k){
   const text = shareTextOf(k);
+  const title = `Quyết toán Kỳ ${k + 1}`;
+  const blob = await prepareShareImage(k);
+  if(blob){
+    const file = new File([blob], `quyet-toan-ky-${k + 1}.png`, { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try{
+        await navigator.share({ files: [file], title, text });
+        return;
+      }catch(e){
+        if(e && e.name === 'AbortError') return;
+      }
+    }
+    downloadBlob(blob, file.name);
+    await copyText(text);
+    showToast('Đã tải ảnh bảng giao dịch và sao chép tóm tắt');
+    return;
+  }
   if(navigator.share){
     try{
-      await navigator.share({ title: `Quyết toán Kỳ ${k + 1}`, text });
+      await navigator.share({ title, text });
       return;
     }catch(e){
       if(e && e.name === 'AbortError') return;
@@ -1890,6 +2011,7 @@ function openResult(k){
   document.getElementById('resultSummary').innerHTML = lines
     .map(([key, v]) => `<div class="line"><span>${key}</span><span class="num">${v}</span></div>`).join('');
   document.getElementById('resultShareBtn').onclick = () => shareSettlement(k);
+  prepareShareImage(k);
   document.getElementById('resultBackdrop').classList.add('open');
   document.getElementById('resultSheet').classList.add('open');
 }
@@ -2272,6 +2394,7 @@ async function loadItems(){
   refreshBackupNotice();
 }
 async function saveItems(){
+  shareImageCache.clear();
   const ok = storage.set(items);
   if(!ok) showToast('Không lưu được, thử lại nhé');
 }
