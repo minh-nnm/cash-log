@@ -466,6 +466,16 @@
     color:var(--ink);
   }
   .field input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .money-input{position:relative;}
+  .money-input input{padding-right:40px; font-weight:600; font-variant-numeric:tabular-nums;}
+  .money-input .suffix{
+    position:absolute;
+    right:14px; top:50%;
+    transform:translateY(-50%);
+    color:var(--muted);
+    font-weight:600;
+    pointer-events:none;
+  }
   .sheet-actions{
     display:flex;
     gap:10px;
@@ -649,8 +659,11 @@
     <input type="text" id="fName" placeholder="VD: Nguyễn Văn A" autocomplete="off">
   </div>
   <div class="field">
-    <label for="fAmount">Số tiền (VND)</label>
-    <input type="number" id="fAmount" placeholder="VD: 500000" inputmode="numeric">
+    <label for="fAmount">Số tiền</label>
+    <div class="money-input">
+      <input type="text" id="fAmount" placeholder="VD: 500.000" inputmode="numeric" autocomplete="off">
+      <span class="suffix">₫</span>
+    </div>
   </div>
   <div class="field">
     <label for="fDate">Ngày giao dịch</label>
@@ -1105,7 +1118,7 @@ async function handleScanImage(file){
     openSheet(null, parsed.type);
     document.getElementById('sheetTitle').textContent = 'Xác nhận giao dịch (từ ảnh)';
     if(parsed.name) document.getElementById('fName').value = parsed.name;
-    if(parsed.amount) document.getElementById('fAmount').value = parsed.amount;
+    if(parsed.amount) setAmountInput(parsed.amount);
     if(parsed.date) document.getElementById('fDate').value = parsed.date;
     if(parsed.note) document.getElementById('fNote').value = parsed.note;
     showToast('Đã đọc xong, kiểm tra lại rồi lưu nhé');
@@ -1266,10 +1279,33 @@ async function saveItems(){
   if(!ok) showToast('Không lưu được, thử lại nhé');
 }
 
+// Ô số tiền: tự thêm dấu chấm hàng nghìn khi gõ (1250000 -> 1.250.000)
+function setAmountInput(n){
+  document.getElementById('fAmount').value = n ? new Intl.NumberFormat('vi-VN').format(n) : '';
+}
+function readAmountInput(){
+  return parseInt(document.getElementById('fAmount').value.replace(/\D/g, ''), 10) || 0;
+}
+function formatAmountInput(){
+  const el = document.getElementById('fAmount');
+  const caret = el.selectionStart ?? el.value.length;
+  // Giữ con trỏ đứng sau đúng chữ số đang gõ, dù dấu chấm được thêm/bớt phía trước
+  const digitsBefore = el.value.slice(0, caret).replace(/\D/g, '').length;
+  const digits = el.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 15);
+  setAmountInput(Number(digits));
+  if(digits === '0') el.value = '0';
+  let pos = 0, seen = 0;
+  while(pos < el.value.length && seen < digitsBefore){
+    if(/\d/.test(el.value[pos])) seen++;
+    pos++;
+  }
+  if(document.activeElement === el) el.setSelectionRange(pos, pos);
+}
+
 function openSheet(edit, type = 'in'){
   editingId = null;
   document.getElementById('fName').value = '';
-  document.getElementById('fAmount').value = '';
+  setAmountInput(0);
   document.getElementById('fDate').value = todayISO();
   document.getElementById('fNote').value = '';
 
@@ -1277,7 +1313,7 @@ function openSheet(edit, type = 'in'){
     editingId = edit.id;
     type = edit.type;
     document.getElementById('fName').value = edit.name;
-    document.getElementById('fAmount').value = edit.amount;
+    setAmountInput(edit.amount);
     document.getElementById('fDate').value = edit.date;
     document.getElementById('fNote').value = edit.note || '';
   }
@@ -1297,7 +1333,7 @@ async function handleSave(){
   const cfg = formType === 'out' ? OUT_CFG : BOOKS[currentBook];
   const type = formType;
   const name = document.getElementById('fName').value.trim();
-  const amount = parseFloat(document.getElementById('fAmount').value);
+  const amount = readAmountInput();
   const date = document.getElementById('fDate').value || todayISO();
   const note = document.getElementById('fNote').value.trim();
 
@@ -1475,6 +1511,15 @@ document.getElementById('cancelBtn').addEventListener('click', closeSheet);
 document.getElementById('backdrop').addEventListener('click', closeSheet);
 document.getElementById('saveBtn').addEventListener('click', handleSave);
 document.getElementById('deleteBtn').addEventListener('click', () => { if(editingId) handleDelete(editingId); });
+document.getElementById('fAmount').addEventListener('input', formatAmountInput);
+// Xóa ngay cạnh dấu chấm thì bỏ qua dấu chấm để xóa chữ số, nếu không dấu chấm sẽ bị thêm lại ngay
+document.getElementById('fAmount').addEventListener('beforeinput', (e) => {
+  const el = e.target;
+  if(el.selectionStart !== el.selectionEnd) return;
+  const pos = el.selectionStart;
+  if(e.inputType === 'deleteContentBackward' && el.value[pos - 1] === '.') el.setSelectionRange(pos - 1, pos - 1);
+  if(e.inputType === 'deleteContentForward' && el.value[pos] === '.') el.setSelectionRange(pos + 1, pos + 1);
+});
 document.querySelectorAll('#typeFilter .book-tab').forEach(btn => {
   btn.addEventListener('click', () => { typeFilter = btn.dataset.type; render(); });
 });
