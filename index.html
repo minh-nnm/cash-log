@@ -47,6 +47,25 @@
   }
   /* Tab Tổng chỉ để xem, thêm giao dịch ở từng sổ */
   body.book-tong .fab, body.book-tong .fab-scan{display:none;}
+  /* Kỳ đã chốt sổ chỉ để xem lại, giao dịch mới luôn vào kỳ hiện tại */
+  body.past-period .fab, body.past-period .fab-scan{display:none;}
+
+  .period-bar{
+    display:none;
+    margin:12px 20px 0;
+  }
+  .period-bar.open{display:block;}
+  .period-bar select{
+    width:100%;
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--white);
+    font-size:14px;
+    font-weight:600;
+    color:var(--ink);
+  }
+  .sheet-text{color:var(--muted); font-size:14px; line-height:1.6; margin:0 0 16px;}
   .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; font-variant-numeric: tabular-nums;}
 
   header{
@@ -400,7 +419,7 @@
 <header>
   <p class="eyebrow">Cá nhân · lưu trên máy này</p>
   <h1>Sổ thu tiền</h1>
-  <button class="header-icon-btn" id="settingsBtn" aria-label="Sao lưu dữ liệu">
+  <button class="header-icon-btn" id="settingsBtn" aria-label="Quản lý sổ">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
   </button>
 </header>
@@ -409,6 +428,10 @@
   <button class="book-tab active" data-book="thu">Thu tiền</button>
   <button class="book-tab" data-book="luong">Lương</button>
   <button class="book-tab" data-book="tong">Tổng</button>
+</div>
+
+<div class="period-bar" id="periodBar">
+  <select id="periodSelect" aria-label="Chọn kỳ"></select>
 </div>
 
 <div class="total-card">
@@ -472,7 +495,21 @@
 
 <div class="sheet-backdrop" id="settingsBackdrop"></div>
 <div class="sheet" id="settingsSheet">
-  <h2>Sao lưu dữ liệu</h2>
+  <h2>Quản lý sổ</h2>
+  <button class="menu-row" id="closingBtn">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+    <span>
+      Chốt sổ / Quyết toán
+      <span class="menu-sub">Chốt chung cả 2 sổ, bắt đầu kỳ mới tính từ 0</span>
+    </span>
+  </button>
+  <button class="menu-row" id="reopenBtn" style="display:none;">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+    <span>
+      Hủy lần chốt sổ gần nhất
+      <span class="menu-sub" id="reopenSub"></span>
+    </span>
+  </button>
   <button class="menu-row" id="exportBtn">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
     <span>
@@ -494,10 +531,24 @@
 <div class="sheet-backdrop" id="confirmBackdrop"></div>
 <div class="sheet" id="confirmSheet">
   <h2>Xác nhận</h2>
-  <p id="confirmMsg" style="color:var(--muted); font-size:14px; line-height:1.6; margin:0 0 16px;"></p>
+  <p id="confirmMsg" class="sheet-text"></p>
   <div class="sheet-actions">
     <button class="btn btn-ghost" id="confirmCancelBtn">Hủy</button>
     <button class="btn btn-primary" id="confirmOkBtn">Đồng ý</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="closingBackdrop"></div>
+<div class="sheet" id="closingSheet">
+  <h2>Chốt sổ / Quyết toán</h2>
+  <p class="sheet-text">Chốt chung cả 2 sổ Thu tiền và Lương. Giao dịch từ ngày bắt đầu kỳ mới trở đi sẽ vào kỳ mới, số dư kỳ mới tính lại từ 0. Lịch sử các kỳ cũ vẫn xem lại được.</p>
+  <div class="field">
+    <label for="fClosingDate">Kỳ mới bắt đầu từ ngày</label>
+    <input type="date" id="fClosingDate">
+  </div>
+  <div class="sheet-actions">
+    <button class="btn btn-ghost" id="closingCancelBtn">Hủy</button>
+    <button class="btn btn-primary" id="closingOkBtn">Chốt sổ</button>
   </div>
 </div>
 
@@ -552,11 +603,34 @@ let dateRange = null; // { from, to } khi lọc theo khoảng ngày
 let typeFilter = 'all'; // 'all' | 'in' | 'out'
 let formType = 'in';    // kiểu đang chọn trong form thêm/sửa
 
+// Chốt sổ: lưu danh sách ngày bắt đầu các kỳ mới (YYYY-MM-DD, tăng dần), dùng chung cho cả 2 sổ.
+// Giao dịch thuộc kỳ thứ N nếu có đúng N ngày chốt <= ngày giao dịch; kỳ hiện tại = closings.length.
+const CLOSINGS_KEY = 'so-thu-tien-closings';
+let closings = loadClosings();
+let viewPeriod = closings.length;
+function loadClosings(){
+  try{
+    const data = JSON.parse(localStorage.getItem(CLOSINGS_KEY) || '[]');
+    return Array.isArray(data) ? data.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort() : [];
+  }catch(e){ return []; }
+}
+function saveClosings(){
+  try{
+    localStorage.setItem(CLOSINGS_KEY, JSON.stringify(closings));
+    return true;
+  }catch(e){ return false; }
+}
+const periodOf = date => closings.filter(c => c <= (date || '')).length;
+const isPastPeriod = () => viewPeriod < closings.length;
+const periodItems = () => items.filter(i => periodOf(i.date) === viewPeriod);
+
 // Giao dịch cũ không có trường type => coi là tiền vào
 const isOut = i => i.type === 'out';
 function sumAmount(list){ return list.reduce((s,i) => s + (i.amount || 0), 0); }
-function bookBalance(excludeId){
-  const list = items.filter(i => i.id !== excludeId);
+// Số dư chỉ tính trong kỳ chứa ngày giao dịch, vì mỗi kỳ đã quyết toán hết
+function bookBalance(excludeId, date){
+  const period = periodOf(date);
+  const list = items.filter(i => i.id !== excludeId && periodOf(i.date) === period);
   return sumAmount(list.filter(i => !isOut(i))) - sumAmount(list.filter(isOut));
 }
 
@@ -598,6 +672,16 @@ function fmtDateShort(iso){
   if(!iso) return '';
   const [y,m,d] = iso.split('-');
   return `${d}/${m}/${y}`;
+}
+function dayBefore(iso){
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0,10);
+}
+function periodLabel(k){
+  if(k === closings.length) return `Kỳ hiện tại · từ ${fmtDateShort(closings[k-1])}`;
+  const end = fmtDateShort(dayBefore(closings[k]));
+  return k === 0 ? `Kỳ 1 · đến ${end}` : `Kỳ ${k+1} · ${fmtDateShort(closings[k-1])} – ${end}`;
 }
 function monthKey(iso){
   if(!iso) return 'khac';
@@ -691,6 +775,8 @@ function handleExport(){
   const kieu = i => isOut(i) ? 'Rút' : 'Thu';
   thu.forEach(i => rows.push(['Thu tiền', i.name, i.amount, fmtDateShort(i.date), i.note || '', kieu(i)]));
   luong.forEach(i => rows.push(['Lương', i.name, i.amount, fmtDateShort(i.date), i.note || '', kieu(i)]));
+  // Dòng chốt sổ không có số tiền nên bản app cũ nhập file này sẽ tự bỏ qua
+  closings.forEach(c => rows.push(['Chốt sổ', 'Bắt đầu kỳ mới', '', fmtDateShort(c), '', '']));
   const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -719,11 +805,15 @@ async function handleImportFile(file){
     showToast('File không có dữ liệu hợp lệ');
     return;
   }
-  const thu = [], luong = [];
+  const thu = [], luong = [], importedClosings = [];
   rows.slice(1).forEach((r, idx) => {
     const [loai, ten, soTien, ngay, ghiChu, kieu] = r;
     const amount = parseFloat(String(soTien).replace(/[^\d.-]/g, ''));
     const date = parseDateShortToISO(ngay);
+    if((loai || '').trim() === 'Chốt sổ'){
+      if(date && !importedClosings.includes(date)) importedClosings.push(date);
+      return;
+    }
     if(!ten || !amount || !date) return;
     const item = {
       id: 'tx_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
@@ -738,11 +828,14 @@ async function handleImportFile(file){
     showToast('Không tìm thấy dòng dữ liệu hợp lệ trong file');
     return;
   }
-  const ok = await showConfirm(`Tìm thấy ${thu.length} dòng Thu tiền và ${luong.length} dòng Lương. Nhập sẽ GHI ĐÈ dữ liệu hiện tại. Tiếp tục?`);
+  const closingText = importedClosings.length ? ` và ${importedClosings.length} lần chốt sổ` : '';
+  const ok = await showConfirm(`Tìm thấy ${thu.length} dòng Thu tiền, ${luong.length} dòng Lương${closingText}. Nhập sẽ GHI ĐÈ dữ liệu hiện tại. Tiếp tục?`);
   if(!ok) return;
   localStorage.setItem(BOOKS.thu.key, JSON.stringify(thu));
   localStorage.setItem(BOOKS.luong.key, JSON.stringify(luong));
-  loadItems();
+  closings = importedClosings.sort();
+  saveClosings();
+  setViewPeriod(closings.length);
   showToast('Đã nhập dữ liệu thành công');
 }
 
@@ -829,16 +922,87 @@ function setFormType(type){
   document.getElementById('sheetTitle').textContent = editingId ? cfg.editTitle : cfg.addTitle;
 }
 
-function switchBook(book){
-  if(book === currentBook || !(book in BOOKS || book === SUMMARY)) return;
-  currentBook = book;
-  localStorage.setItem(ACTIVE_BOOK_KEY, book);
+function resetFilters(){
   activeFilter = 'all';
   typeFilter = 'all';
   dateRange = null;
   document.getElementById('rangeFrom').value = '';
   document.getElementById('rangeTo').value = '';
   document.getElementById('rangeBar').classList.remove('open');
+}
+
+function setViewPeriod(k){
+  viewPeriod = Math.min(Math.max(k, 0), closings.length);
+  resetFilters();
+  const select = document.getElementById('periodSelect');
+  select.innerHTML = '';
+  for(let i = closings.length; i >= 0; i--){
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = periodLabel(i);
+    select.appendChild(opt);
+  }
+  select.value = viewPeriod;
+  // Chưa chốt sổ lần nào thì không cần hiện chọn kỳ
+  document.getElementById('periodBar').classList.toggle('open', closings.length > 0);
+  document.body.classList.toggle('past-period', isPastPeriod());
+  const last = closings[closings.length - 1];
+  document.getElementById('reopenBtn').style.display = last ? '' : 'none';
+  document.getElementById('reopenSub').textContent = last ? `Gộp kỳ hiện tại vào kỳ trước (bỏ lần chốt ngày ${fmtDateShort(last)})` : '';
+  loadItems();
+}
+
+function openClosing(){
+  const input = document.getElementById('fClosingDate');
+  input.value = todayISO();
+  input.max = todayISO();
+  document.getElementById('closingBackdrop').classList.add('open');
+  document.getElementById('closingSheet').classList.add('open');
+}
+function closeClosing(){
+  document.getElementById('closingBackdrop').classList.remove('open');
+  document.getElementById('closingSheet').classList.remove('open');
+}
+
+async function handleClosing(){
+  const date = document.getElementById('fClosingDate').value;
+  const last = closings[closings.length - 1];
+  if(!date){ showToast('Chọn ngày bắt đầu kỳ mới'); return; }
+  if(date > todayISO()){ showToast('Ngày bắt đầu kỳ mới không được sau hôm nay'); return; }
+  if(last && date <= last){ showToast(`Ngày phải sau lần chốt trước (${fmtDateShort(last)})`); return; }
+  closeClosing();
+  const ok = await showConfirm(`Chốt sổ cả Thu tiền và Lương. Kỳ mới bắt đầu từ ${fmtDateShort(date)}, số dư tính lại từ 0. Tiếp tục?`);
+  if(!ok) return;
+  closings.push(date);
+  if(!saveClosings()){
+    closings.pop();
+    showToast('Không lưu được, thử lại nhé');
+    return;
+  }
+  setViewPeriod(closings.length);
+  showToast('Đã chốt sổ, bắt đầu kỳ mới');
+}
+
+async function handleReopen(){
+  const last = closings[closings.length - 1];
+  if(!last) return;
+  const ok = await showConfirm(`Bỏ lần chốt sổ ngày ${fmtDateShort(last)}? Giao dịch của kỳ hiện tại sẽ gộp lại vào kỳ trước.`);
+  if(!ok) return;
+  closings.pop();
+  if(!saveClosings()){
+    closings.push(last);
+    showToast('Không lưu được, thử lại nhé');
+    return;
+  }
+  setViewPeriod(closings.length);
+  showToast('Đã hủy lần chốt sổ gần nhất');
+}
+
+function switchBook(book){
+  if(book === currentBook || !(book in BOOKS || book === SUMMARY)) return;
+  currentBook = book;
+  localStorage.setItem(ACTIVE_BOOK_KEY, book);
+  resetFilters();
   document.querySelectorAll('#bookTabs .book-tab').forEach(b => b.classList.toggle('active', b.dataset.book === book));
   document.body.classList.toggle('book-luong', book === 'luong');
   document.body.classList.toggle('book-tong', book === SUMMARY);
@@ -890,7 +1054,7 @@ async function handleSave(){
   if(!name){ showToast(`Nhập ${cfg.nameLabel.toLowerCase()}`); return; }
   if(!amount || amount <= 0){ showToast('Nhập số tiền hợp lệ'); return; }
   if(type === 'out'){
-    const balance = bookBalance(editingId);
+    const balance = bookBalance(editingId, date);
     if(amount > balance){
       const ok = await showConfirm(`Số rút (${fmtVND(amount)}) lớn hơn số dư hiện tại (${fmtVND(balance)}). Vẫn lưu?`);
       if(!ok) return;
@@ -922,8 +1086,9 @@ async function handleDelete(id){
 }
 
 function render(){
+  const shown = periodItems();
   // filters (by month)
-  const months = Array.from(new Set(items.map(i => monthKey(i.date))))
+  const months = Array.from(new Set(shown.map(i => monthKey(i.date))))
     .sort((a,b) => b.localeCompare(a));
   const filterRow = document.getElementById('filterRow');
   filterRow.innerHTML = '';
@@ -957,9 +1122,9 @@ function render(){
 
   let filtered;
   if(activeFilter === 'range' && dateRange){
-    filtered = items.filter(i => i.date && i.date >= dateRange.from && i.date <= dateRange.to);
+    filtered = shown.filter(i => i.date && i.date >= dateRange.from && i.date <= dateRange.to);
   } else {
-    filtered = activeFilter === 'all' ? items : items.filter(i => monthKey(i.date) === activeFilter);
+    filtered = activeFilter === 'all' ? shown : shown.filter(i => monthKey(i.date) === activeFilter);
   }
   const tin = sumAmount(filtered.filter(i => !isOut(i)));
   const tout = sumAmount(filtered.filter(isOut));
@@ -992,7 +1157,7 @@ function render(){
   if(filtered.length === 0){
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = viewCfg().emptyText;
+    empty.textContent = closings.length && !shown.length ? 'Chưa có giao dịch nào trong kỳ này.' : viewCfg().emptyText;
     list.appendChild(empty);
     return;
   }
@@ -1082,6 +1247,12 @@ document.getElementById('importInput').addEventListener('change', async (e) => {
   closeSettings();
   await handleImportFile(file);
 });
+document.getElementById('periodSelect').addEventListener('change', (e) => setViewPeriod(parseInt(e.target.value, 10)));
+document.getElementById('closingBtn').addEventListener('click', () => { closeSettings(); openClosing(); });
+document.getElementById('reopenBtn').addEventListener('click', () => { closeSettings(); handleReopen(); });
+document.getElementById('closingCancelBtn').addEventListener('click', closeClosing);
+document.getElementById('closingBackdrop').addEventListener('click', closeClosing);
+document.getElementById('closingOkBtn').addEventListener('click', handleClosing);
 document.getElementById('confirmCancelBtn').addEventListener('click', () => closeConfirm(false));
 document.getElementById('confirmOkBtn').addEventListener('click', () => closeConfirm(true));
 document.getElementById('confirmBackdrop').addEventListener('click', () => closeConfirm(false));
@@ -1090,7 +1261,7 @@ document.querySelectorAll('#bookTabs .book-tab').forEach(b => b.classList.toggle
 document.body.classList.toggle('book-luong', currentBook === 'luong');
 document.body.classList.toggle('book-tong', currentBook === SUMMARY);
 setFormType('in');
-loadItems();
+setViewPeriod(closings.length);
 
 if('serviceWorker' in navigator){
   // Khi service worker mới tiếp quản thì tải lại 1 lần để hiện ngay code mới
