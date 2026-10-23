@@ -247,6 +247,8 @@
   .past-banner.open{display:flex;}
   .past-banner svg{flex:none; color:var(--accent);}
   .past-banner .text{flex:1; min-width:0;}
+  .past-banner .icon-only{display:flex; padding:4px 6px;}
+  .past-banner .icon-only svg{color:var(--accent);}
   .past-banner button{
     flex:none;
     border:none;
@@ -769,6 +771,9 @@
 <div class="past-banner" id="pastBanner">
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
   <span class="text" id="pastBannerText"></span>
+  <button id="pastShareBtn" class="icon-only" aria-label="Chia sẻ kết quả quyết toán">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+  </button>
   <button id="pastBannerBtn">Về kỳ hiện tại →</button>
 </div>
 
@@ -912,6 +917,17 @@
   <h2>Chọn kỳ</h2>
   <div class="period-list" id="periodList"></div>
   <button class="btn btn-ghost" id="periodCloseBtn" style="width:100%;">Đóng</button>
+</div>
+
+<div class="sheet-backdrop" id="resultBackdrop"></div>
+<div class="sheet" id="resultSheet">
+  <h2 id="resultTitle">Đã quyết toán</h2>
+  <p class="sheet-text">File sao lưu đã được tải về máy. Gửi bản tóm tắt cho người cùng quyết toán qua Zalo, Messenger…</p>
+  <div class="settle-summary" id="resultSummary"></div>
+  <div class="sheet-actions">
+    <button class="btn btn-ghost" id="resultCloseBtn">Đóng</button>
+    <button class="btn btn-primary" id="resultShareBtn">Chia sẻ</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1202,7 +1218,7 @@ function handleExport(filename = `so-thu-tien-${todayISO()}.csv`, toastMsg = 'Đ
   URL.revokeObjectURL(url);
   try{ localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString()); }catch(e){}
   refreshBackupNotice();
-  showToast(toastMsg);
+  if(toastMsg) showToast(toastMsg);
 }
 
 async function handleImportFile(file){
@@ -1562,7 +1578,7 @@ function setViewPeriod(k){
   document.getElementById('periodBtnLabel').textContent = periodLabel(viewPeriod);
   document.body.classList.toggle('past-period', isPastPeriod());
   document.getElementById('pastBanner').classList.toggle('open', isPastPeriod());
-  document.getElementById('pastBannerText').textContent = isPastPeriod() ? `Đang xem Kỳ ${viewPeriod + 1} · đã quyết toán` : '';
+  document.getElementById('pastBannerText').textContent = isPastPeriod() ? `Kỳ ${viewPeriod + 1} · đã quyết toán` : '';
   const last = settlements[settlements.length - 1];
   document.getElementById('unsettleBtn').style.display = last ? '' : 'none';
   document.getElementById('unsettleSub').textContent = last ? `Gộp kỳ hiện tại vào Kỳ ${settlements.length} (${fmtDateShort(last.from)} – ${fmtDateShort(last.to)})` : '';
@@ -1631,6 +1647,83 @@ function closePeriodSheet(){
   document.getElementById('periodSheet').classList.remove('open');
 }
 
+// Tóm tắt 1 kỳ (gộp 2 sổ) để hiển thị và chia sẻ
+function periodSummary(k){
+  const all = [...readBook('thu'), ...readBook('luong')];
+  const books = Object.keys(BOOKS).map(book => {
+    const list = readBook(book).filter(i => periodOf(i) === k);
+    const tin = sumAmount(list.filter(i => !isOut(i))), tout = sumAmount(list.filter(isOut));
+    return { title: BOOKS[book].title, count: list.length, tin, tout, left: tin - tout };
+  });
+  const inPeriod = all.filter(i => periodOf(i) === k);
+  const s = settlements[k];
+  const range = s ? settleRange(inPeriod) : null;
+  return {
+    k, books,
+    from: s ? s.from : range && range.from,
+    to: s ? s.to : range && range.to,
+    count: inPeriod.length,
+    left: balanceOf(inPeriod),
+  };
+}
+function shareTextOf(k){
+  const sum = periodSummary(k);
+  const lines = [`QUYẾT TOÁN KỲ ${k + 1}`, `${fmtDateShort(sum.from)} – ${fmtDateShort(sum.to)}`];
+  sum.books.filter(b => b.count).forEach(b => {
+    lines.push('', `Sổ ${b.title}`, `• Thu: ${fmtVND(b.tin)}`, `• Rút: ${fmtVND(b.tout)}`, `• Còn lại: ${fmtVND(b.left)}`);
+  });
+  lines.push('', `TỔNG CÒN LẠI: ${fmtVND(sum.left)}`, `(${sum.count} giao dịch)`);
+  return lines.join('\n');
+}
+async function copyText(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+// Mở bảng chia sẻ của máy (Zalo, Messenger...); máy không hỗ trợ thì sao chép để dán
+async function shareSettlement(k){
+  const text = shareTextOf(k);
+  if(navigator.share){
+    try{
+      await navigator.share({ title: `Quyết toán Kỳ ${k + 1}`, text });
+      return;
+    }catch(e){
+      if(e && e.name === 'AbortError') return;
+    }
+  }
+  showToast(await copyText(text) ? 'Đã sao chép, dán vào Zalo/Messenger để gửi' : 'Không chia sẻ được, thử lại nhé');
+}
+
+function openResult(k){
+  const sum = periodSummary(k);
+  document.getElementById('resultTitle').textContent = `Đã quyết toán Kỳ ${k + 1}`;
+  const lines = [
+    ['Từ ngày', fmtDateShort(sum.from)],
+    ['Đến ngày', fmtDateShort(sum.to)],
+    ...sum.books.filter(b => b.count).map(b => [`Còn lại Sổ ${b.title}`, fmtVND(b.left)]),
+    ['Tổng còn lại', fmtVND(sum.left)],
+  ];
+  document.getElementById('resultSummary').innerHTML = lines
+    .map(([key, v]) => `<div class="line"><span>${key}</span><span class="num">${v}</span></div>`).join('');
+  document.getElementById('resultShareBtn').onclick = () => shareSettlement(k);
+  document.getElementById('resultBackdrop').classList.add('open');
+  document.getElementById('resultSheet').classList.add('open');
+}
+function closeResult(){
+  document.getElementById('resultBackdrop').classList.remove('open');
+  document.getElementById('resultSheet').classList.remove('open');
+}
+
 function openSettle(){
   const { thu, luong } = unsettledItems();
   const all = [...thu, ...luong];
@@ -1683,8 +1776,9 @@ function handleSettle(){
   }
   setViewPeriod(settlements.length);
   // Tự sao lưu ngay sau khi quyết toán
-  handleExport(`so-thu-tien-quyet-toan-ky-${settlements.length}-${todayISO()}.csv`,
-    `Đã quyết toán Kỳ ${settlements.length} và tải file sao lưu`);
+  // Bảng kết quả đã báo file sao lưu được tải, không cần thêm thông báo nhỏ che mất nội dung
+  handleExport(`so-thu-tien-quyet-toan-ky-${settlements.length}-${todayISO()}.csv`, null);
+  openResult(settlements.length - 1);
 }
 
 async function handleUnsettle(){
@@ -2047,6 +2141,9 @@ document.getElementById('periodBtn').addEventListener('click', openPeriodSheet);
 document.getElementById('periodCloseBtn').addEventListener('click', closePeriodSheet);
 document.getElementById('periodBackdrop').addEventListener('click', closePeriodSheet);
 document.getElementById('pastBannerBtn').addEventListener('click', () => setViewPeriod(settlements.length));
+document.getElementById('pastShareBtn').addEventListener('click', () => shareSettlement(viewPeriod));
+document.getElementById('resultCloseBtn').addEventListener('click', closeResult);
+document.getElementById('resultBackdrop').addEventListener('click', closeResult);
 document.getElementById('settleBtn').addEventListener('click', () => { closeSettings(); openSettle(); });
 document.getElementById('unsettleBtn').addEventListener('click', () => { closeSettings(); handleUnsettle(); });
 document.getElementById('settleCancelBtn').addEventListener('click', closeSettle);
