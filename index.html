@@ -38,6 +38,8 @@
     --warn:#B9531F;
     --warn-dim:#F8E6DC;
     --shadow:0 1px 2px rgba(18,40,30,.04), 0 6px 18px rgba(18,40,30,.05);
+    --chart-in:#1A6E47;
+    --chart-out:#D9773A;
     --safe-top:env(safe-area-inset-top, 0px);
     --safe-bottom:env(safe-area-inset-bottom, 0px);
   }
@@ -64,6 +66,8 @@
   /* Chế độ tối: data-theme được gán bởi script trong <head> (theo máy hoặc theo lựa chọn trong Quản lý sổ) */
   :root[data-theme="dark"]{
     color-scheme:dark;
+    --chart-in:#1A774D;
+    --chart-out:#D97536;
     --paper:#0E1411;
     --surface:#17201B;
     --ink:#E6EFE9;
@@ -205,6 +209,61 @@
   .period-pill span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .period-pill svg{flex:none; opacity:.8;}
   .period-pill:active{background:rgba(255,255,255,.22);}
+
+  .header-actions{display:flex; gap:8px; flex:none;}
+
+  /* Thống kê */
+  #statsScope{margin-bottom:14px;}
+  .stats-kpis{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;}
+  .kpi.wide{grid-column:1 / -1; display:flex; align-items:baseline; justify-content:space-between;}
+  .kpi.wide .kpi-v{font-size:18px; margin-top:0;}
+  .kpi{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:10px 12px; min-width:0;}
+  .kpi-k{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);}
+  .kpi-v{margin-top:4px; font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis;}
+  .swatch{width:10px; height:10px; border-radius:3px; flex:none;}
+  .swatch.in{background:var(--chart-in);}
+  .swatch.out{background:var(--chart-out);}
+  .stats-card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px;}
+  .stats-card-head{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:14px; font-weight:700; margin-bottom:10px;}
+  .legend{display:flex; gap:12px; font-size:12px; font-weight:500; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:5px;}
+  .chart{position:relative;}
+  .chart svg{display:block; width:100%; height:auto; overflow:visible;}
+  .chart .grid{stroke:var(--line); stroke-width:1;}
+  .chart .axis-label{fill:var(--muted); font-size:10px;}
+  .chart .bar-in{fill:var(--chart-in);}
+  .chart .bar-out{fill:var(--chart-out);}
+  .chart .band-hl{fill:var(--accent-dim); opacity:0;}
+  .chart .band.active .band-hl{opacity:1;}
+  .chart .band{cursor:pointer;}
+  /* Dòng số liệu của tháng đang chọn (thay cho hộp nổi, không che biểu đồ trên điện thoại) */
+  .chart-readout{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:4px 14px;
+    margin-top:8px;
+    padding:8px 10px;
+    border-radius:10px;
+    background:var(--paper);
+    font-size:13px;
+  }
+  .chart-readout b{font-weight:700; flex-basis:100%;}
+  .chart-readout span{display:inline-flex; align-items:center; gap:6px;}
+  .stats-card details{margin-top:10px; font-size:13px;}
+  .stats-card summary{color:var(--accent); font-weight:600; cursor:pointer; padding:4px 0;}
+  .stats-table{width:100%; border-collapse:collapse; margin-top:6px; font-variant-numeric:tabular-nums;}
+  .stats-table th, .stats-table td{padding:7px 0; text-align:right; border-bottom:1px solid var(--line);}
+  .stats-table th:first-child, .stats-table td:first-child{text-align:left;}
+  .stats-table th{font-size:12px; font-weight:600; color:var(--muted);}
+  .top-row{padding:8px 0;}
+  .top-row + .top-row{border-top:1px solid var(--line);}
+  .top-line{display:flex; justify-content:space-between; gap:12px; font-size:14px;}
+  .top-name{font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .top-sub{font-size:12px; color:var(--muted); margin-top:1px;}
+  .top-track{height:6px; border-radius:3px; background:var(--accent-dim); margin-top:6px; overflow:hidden;}
+  .top-fill{height:100%; border-radius:3px; background:var(--accent);}
+  .stats-empty{color:var(--muted); font-size:13px; padding:12px 0; text-align:center;}
 
   /* Nhắc sao lưu */
   .notice{
@@ -719,9 +778,14 @@
     <p class="eyebrow">Cá nhân · lưu trên máy này</p>
     <h1>Sổ thu tiền</h1>
   </div>
+  <div class="header-actions">
+  <button class="header-icon-btn" id="statsBtn" aria-label="Thống kê">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+  </button>
   <button class="header-icon-btn" id="settingsBtn" aria-label="Quản lý sổ">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
   </button>
+  </div>
 </header>
 
 <div class="notice" id="backupNotice" role="status">
@@ -917,6 +981,32 @@
   <h2>Chọn kỳ</h2>
   <div class="period-list" id="periodList"></div>
   <button class="btn btn-ghost" id="periodCloseBtn" style="width:100%;">Đóng</button>
+</div>
+
+<div class="sheet-backdrop" id="statsBackdrop"></div>
+<div class="sheet" id="statsSheet">
+  <h2 id="statsTitle">Thống kê</h2>
+  <div class="book-tabs seg-sm" id="statsScope">
+    <button class="book-tab active" data-scope="period">Kỳ đang xem</button>
+    <button class="book-tab" data-scope="all">Toàn bộ</button>
+  </div>
+  <div class="stats-kpis" id="statsKpis"></div>
+  <div class="stats-card">
+    <div class="stats-card-head">
+      <span>Thu và rút theo tháng</span>
+      <span class="legend"><span><i class="swatch in"></i>Thu</span><span><i class="swatch out"></i>Rút</span></span>
+    </div>
+    <div class="chart" id="statsChart"></div>
+    <details>
+      <summary>Xem số liệu từng tháng</summary>
+      <table class="stats-table" id="statsTable"></table>
+    </details>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-head"><span id="statsTopTitle">Người chuyển nhiều nhất</span></div>
+    <div id="statsTop"></div>
+  </div>
+  <button class="btn btn-ghost" id="statsCloseBtn" style="width:100%;">Đóng</button>
 </div>
 
 <div class="sheet-backdrop" id="resultBackdrop"></div>
@@ -1724,6 +1814,134 @@ function closeResult(){
   document.getElementById('resultSheet').classList.remove('open');
 }
 
+// ---- Thống kê ----
+let statsScope = 'period'; // 'period' (kỳ đang xem) | 'all' (toàn bộ)
+function statsItems(){
+  const source = isSummary() ? [...readBook('thu'), ...readBook('luong')] : readBook(currentBook);
+  return statsScope === 'all' ? source : source.filter(i => periodOf(i) === viewPeriod);
+}
+// Số gọn cho trục: 1,5tr · 500k · 2 tỷ
+function fmtShort(n){
+  const f = (v, unit) => `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(v)}${unit}`;
+  if(n >= 1e9) return f(n / 1e9, ' tỷ');
+  if(n >= 1e6) return f(n / 1e6, 'tr');
+  if(n >= 1e3) return f(n / 1e3, 'k');
+  return String(n);
+}
+function niceMax(v){
+  if(v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  return [1, 2, 2.5, 5, 10].map(m => m * p).find(m => m >= v);
+}
+// Các tháng liên tiếp từ tháng đầu đến tháng cuối có dữ liệu (tối đa 12 tháng gần nhất)
+function monthSeries(list){
+  const keys = list.map(i => monthKey(i.date)).filter(k => k !== 'khac').sort();
+  if(!keys.length) return [];
+  let [y, m] = keys[0].split('-').map(Number);
+  const [ly, lm] = keys[keys.length - 1].split('-').map(Number);
+  const months = [];
+  while(y < ly || (y === ly && m <= lm)){
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    const inMonth = list.filter(i => monthKey(i.date) === key);
+    months.push({ key, y, m, tin: sumAmount(inMonth.filter(i => !isOut(i))), tout: sumAmount(inMonth.filter(isOut)) });
+    if(++m > 12){ m = 1; y++; }
+  }
+  return months.slice(-12);
+}
+// Cột bo tròn 4px ở đầu, đáy nằm trên đường gốc
+function barPath(x, y, w, h){
+  if(h <= 0) return '';
+  const r = Math.min(4, w / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+function renderStatsChart(months){
+  const box = document.getElementById('statsChart');
+  if(!months.length){ box.innerHTML = '<div class="stats-empty">Chưa có dữ liệu để vẽ biểu đồ</div>'; return; }
+  const W = Math.max(280, box.clientWidth || 320), H = 180, padL = 40, padB = 22, padT = 8;
+  const plotW = W - padL, plotH = H - padB - padT;
+  const max = niceMax(Math.max(...months.map(mo => Math.max(mo.tin, mo.tout))));
+  const yOf = v => padT + plotH - (v / max) * plotH;
+  const band = plotW / months.length;
+  const barW = Math.max(4, Math.min(18, (band * 0.72 - 2) / 2));
+  const multiYear = months[0].y !== months[months.length - 1].y;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Biểu đồ thu và rút theo tháng">`;
+  [0, 0.5, 1].forEach(t => {
+    const y = yOf(max * t);
+    svg += `<line class="grid" x1="${padL}" x2="${W}" y1="${y}" y2="${y}"/>`;
+    svg += `<text class="axis-label" x="${padL - 6}" y="${y + 3}" text-anchor="end">${t ? fmtShort(max * t) : '0'}</text>`;
+  });
+  months.forEach((mo, i) => {
+    const x0 = padL + i * band, cx = x0 + band / 2;
+    const label = `T${mo.m}` + ((i === 0 || mo.m === 1) && multiYear ? `/${String(mo.y).slice(2)}` : '');
+    // Vùng chạm phủ cả cột tháng, rộng hơn cột để dễ bấm trên điện thoại
+    svg += `<g class="band" data-i="${i}"><rect class="band-hl" x="${x0 + 1}" y="${padT}" width="${band - 2}" height="${plotH}" rx="6"/>`;
+    svg += `<path class="bar-in" d="${barPath(cx - barW - 1, yOf(mo.tin), barW, padT + plotH - yOf(mo.tin))}"/>`;
+    svg += `<path class="bar-out" d="${barPath(cx + 1, yOf(mo.tout), barW, padT + plotH - yOf(mo.tout))}"/>`;
+    svg += `<rect x="${x0}" y="0" width="${band}" height="${H}" fill="transparent"/></g>`;
+    svg += `<text class="axis-label" x="${cx}" y="${H - 6}" text-anchor="middle">${label}</text>`;
+  });
+  svg += `<line class="grid" x1="${padL}" x2="${W}" y1="${padT + plotH}" y2="${padT + plotH}" style="stroke:var(--muted)"/></svg>`;
+  box.innerHTML = svg + '<div class="chart-readout num" id="chartReadout" aria-live="polite"></div>';
+  const readout = document.getElementById('chartReadout');
+  const bands = [...box.querySelectorAll('.band')];
+  const show = (i) => {
+    bands.forEach((b, j) => b.classList.toggle('active', j === i));
+    const mo = months[i];
+    readout.innerHTML = `<b>Tháng ${mo.m}/${mo.y}</b>` +
+      `<span><i class="swatch in"></i>Thu ${fmtVND(mo.tin)}</span><span><i class="swatch out"></i>Rút ${fmtVND(mo.tout)}</span>`;
+  };
+  bands.forEach((g, i) => {
+    g.addEventListener('pointerenter', () => show(i));
+    g.addEventListener('click', () => show(i));
+  });
+  show(months.length - 1);
+}
+function renderStats(){
+  const list = statsItems();
+  const where = isSummary() ? 'cả 2 sổ' : `Sổ ${BOOKS[currentBook].title}`;
+  document.getElementById('statsTitle').textContent = `Thống kê · ${where}`;
+  document.querySelectorAll('#statsScope .book-tab').forEach(b => b.classList.toggle('active', b.dataset.scope === statsScope));
+  const tin = sumAmount(list.filter(i => !isOut(i))), tout = sumAmount(list.filter(isOut));
+  document.getElementById('statsKpis').innerHTML = [
+    ['<i class="swatch in"></i>Thu', tin, ''],
+    ['<i class="swatch out"></i>Rút', tout, ''],
+    ['Còn lại', tin - tout, ' wide'],
+  ].map(([k, v, cls]) => `<div class="kpi${cls}"><div class="kpi-k">${k}</div><div class="kpi-v num">${moneyHTML(v)}</div></div>`).join('');
+
+  const months = monthSeries(list);
+  renderStatsChart(months);
+  document.getElementById('statsTable').innerHTML = '<tr><th>Tháng</th><th>Thu</th><th>Rút</th></tr>' +
+    months.slice().reverse().map(mo => `<tr><td>${mo.m}/${mo.y}</td><td>${fmtVND(mo.tin)}</td><td>${fmtVND(mo.tout)}</td></tr>`).join('');
+
+  // Người chuyển nhiều nhất: gộp theo tên (không phân biệt dấu/hoa thường)
+  const groups = new Map();
+  list.filter(i => !isOut(i)).forEach(i => {
+    const key = stripDiacritics((i.name || '').trim()).toLowerCase();
+    if(!key) return;
+    const g = groups.get(key) || { name: i.name.trim(), total: 0, count: 0 };
+    g.total += i.amount || 0; g.count++;
+    groups.set(key, g);
+  });
+  const top = [...groups.values()].sort((a, b) => b.total - a.total).slice(0, 5);
+  document.getElementById('statsTopTitle').textContent = currentBook === 'luong' ? 'Nơi trả lương nhiều nhất' : 'Người chuyển nhiều nhất';
+  document.getElementById('statsTop').innerHTML = top.length ? top.map(g => `
+    <div class="top-row">
+      <div class="top-line"><span class="top-name">${escapeHtml(g.name)}</span><span class="num">${moneyHTML(g.total)}</span></div>
+      <div class="top-sub">${g.count} lần</div>
+      <div class="top-track"><div class="top-fill" style="width:${Math.max(2, g.total / top[0].total * 100)}%"></div></div>
+    </div>`).join('') : '<div class="stats-empty">Chưa có khoản thu nào</div>';
+}
+function openStats(){
+  document.getElementById('statsBackdrop').classList.add('open');
+  document.getElementById('statsSheet').classList.add('open');
+  // Vẽ sau khi bảng hiện ra để đo đúng chiều rộng biểu đồ
+  requestAnimationFrame(renderStats);
+}
+function closeStats(){
+  document.getElementById('statsBackdrop').classList.remove('open');
+  document.getElementById('statsSheet').classList.remove('open');
+}
+
 function openSettle(){
   const { thu, luong } = unsettledItems();
   const all = [...thu, ...luong];
@@ -2143,6 +2361,12 @@ document.getElementById('periodBackdrop').addEventListener('click', closePeriodS
 document.getElementById('pastBannerBtn').addEventListener('click', () => setViewPeriod(settlements.length));
 document.getElementById('pastShareBtn').addEventListener('click', () => shareSettlement(viewPeriod));
 document.getElementById('resultCloseBtn').addEventListener('click', closeResult);
+document.getElementById('statsBtn').addEventListener('click', openStats);
+document.getElementById('statsCloseBtn').addEventListener('click', closeStats);
+document.getElementById('statsBackdrop').addEventListener('click', closeStats);
+document.querySelectorAll('#statsScope .book-tab').forEach(btn => {
+  btn.addEventListener('click', () => { statsScope = btn.dataset.scope; renderStats(); });
+});
 document.getElementById('resultBackdrop').addEventListener('click', closeResult);
 document.getElementById('settleBtn').addEventListener('click', () => { closeSettings(); openSettle(); });
 document.getElementById('unsettleBtn').addEventListener('click', () => { closeSettings(); handleUnsettle(); });
