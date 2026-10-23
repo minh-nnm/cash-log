@@ -215,7 +215,8 @@
   .header-actions{display:flex; gap:8px; flex:none;}
 
   /* Thống kê */
-  #statsScope{margin-bottom:14px;}
+  #statsScope{margin-bottom:8px;}
+  #statsSub{margin:0 0 14px; font-size:13px;}
   .stats-kpis{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;}
   .kpi.wide{grid-column:1 / -1; display:flex; align-items:baseline; justify-content:space-between;}
   .kpi.wide .kpi-v{font-size:18px; margin-top:0;}
@@ -1048,9 +1049,10 @@
 <div class="sheet" id="statsSheet">
   <h2 id="statsTitle">Thống kê</h2>
   <div class="book-tabs seg-sm" id="statsScope">
-    <button class="book-tab active" data-scope="period">Kỳ đang xem</button>
-    <button class="book-tab" data-scope="all">Toàn bộ</button>
+    <button class="book-tab active" data-scope="period">Kỳ này</button>
+    <button class="book-tab" data-scope="all">Tất cả các kỳ</button>
   </div>
+  <p class="sheet-text" id="statsSub"></p>
   <div class="stats-kpis" id="statsKpis"></div>
   <div class="stats-card">
     <div class="stats-card-head">
@@ -1897,7 +1899,7 @@ function closeResult(){
 }
 
 // ---- Thống kê ----
-let statsScope = 'period'; // 'period' (kỳ đang xem) | 'all' (toàn bộ)
+let statsScope = 'period'; // 'period' (kỳ đang chọn) | 'all' (gộp tất cả các kỳ)
 function statsItems(){
   const source = isSummary() ? [...readBook('thu'), ...readBook('luong')] : readBook(currentBook);
   return statsScope === 'all' ? source : source.filter(i => periodOf(i) === viewPeriod);
@@ -1983,6 +1985,16 @@ function renderStats(){
   const where = isSummary() ? 'cả 2 sổ' : `Sổ ${BOOKS[currentBook].title}`;
   document.getElementById('statsTitle').textContent = `Thống kê · ${where}`;
   document.querySelectorAll('#statsScope .book-tab').forEach(b => b.classList.toggle('active', b.dataset.scope === statsScope));
+  // Ghi rõ đang thống kê kỳ nào để không nhầm với số liệu gộp
+  let sub;
+  if(statsScope === 'all'){
+    const dates = list.map(i => i.date).filter(Boolean).sort();
+    sub = `Gộp ${settlements.length + 1} kỳ` + (dates.length ? ` · từ ${fmtDateShort(dates[0])}` : '');
+  } else {
+    const s = settlements[viewPeriod];
+    sub = s ? `Kỳ ${viewPeriod + 1} · ${fmtDateShort(s.from)} – ${fmtDateShort(s.to)} · đã quyết toán` : 'Kỳ hiện tại · chưa quyết toán';
+  }
+  document.getElementById('statsSub').textContent = sub;
   const tin = sumAmount(list.filter(i => !isOut(i))), tout = sumAmount(list.filter(isOut));
   document.getElementById('statsKpis').innerHTML = [
     ['<i class="swatch in"></i>Thu', tin, ''],
@@ -2014,6 +2026,7 @@ function renderStats(){
     </div>`).join('') : '<div class="stats-empty">Chưa có khoản thu nào</div>';
 }
 function openStats(){
+  statsScope = 'period'; // mỗi lần mở luôn bắt đầu từ kỳ đang chọn
   document.getElementById('statsBackdrop').classList.add('open');
   document.getElementById('statsSheet').classList.add('open');
   // Vẽ sau khi bảng hiện ra để đo đúng chiều rộng biểu đồ
