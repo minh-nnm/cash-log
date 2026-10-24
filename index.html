@@ -818,6 +818,50 @@
     transition:all .25s ease;
     z-index:70;
   }
+  /* Nằm bên trái cột nút nổi (+ và chụp ảnh) để không che chúng */
+  .snackbar{
+    position:fixed;
+    left:max(16px, calc(50% - 264px));
+    right:max(90px, calc(50% - 190px));
+    bottom:calc(20px + var(--safe-bottom));
+    transform:translateY(20px);
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--ink);
+    color:var(--paper);
+    padding:8px 8px 8px 16px;
+    border-radius:14px;
+    font-size:14px;
+    opacity:0;
+    pointer-events:none;
+    transition:all .25s ease;
+    z-index:69;
+  }
+  .snackbar.show{opacity:1; transform:translateY(0); pointer-events:auto;}
+  .snackbar span{flex:1;}
+  .snackbar button{
+    flex:none;
+    border:none;
+    border-radius:10px;
+    padding:9px 14px;
+    background:var(--accent);
+    color:var(--on-accent);
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .report-fields{display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:12px;}
+  .report-fields label{font-size:11px; color:var(--muted); display:block; margin-bottom:4px;}
+  .report-fields input{
+    width:100%;
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--paper);
+    font-size:16px;
+    color:var(--ink);
+  }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 </style>
 </head>
@@ -957,6 +1001,7 @@
     <button class="btn btn-ghost" id="cancelBtn">Hủy</button>
     <button class="btn btn-primary" id="saveBtn">Lưu</button>
   </div>
+  <button class="btn btn-ghost" id="reportBtn" style="display:none; width:100%; margin-top:10px;">Báo cho Bố</button>
   <button class="btn-danger-text" id="deleteBtn" style="display:none;">Xóa giao dịch</button>
 </div>
 
@@ -977,6 +1022,24 @@
       <span class="menu-sub" id="unsettleSub"></span>
     </span>
   </button>
+  <button class="menu-row" id="reportTodayBtn">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    <span>
+      <span id="reportTodayTitle">Báo tổng hôm nay cho Bố</span>
+      <span class="menu-sub">Ảnh bảng các khoản trong ngày ở cả 2 sổ, kèm số tiền đang giữ hộ</span>
+    </span>
+  </button>
+  <div class="theme-box">
+    <div class="theme-head">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      <span>Cách xưng hô khi báo<span class="menu-sub">VD: “Bố ơi, con vừa nhận… / lương của ông về…”</span></span>
+    </div>
+    <div class="report-fields">
+      <div><label for="rTo">Gọi người nhận</label><input id="rTo" placeholder="Bố" autocomplete="off"></div>
+      <div><label for="rMe">Xưng là</label><input id="rMe" placeholder="con" autocomplete="off"></div>
+      <div><label for="rOwner">Lương là của</label><input id="rOwner" placeholder="ông" autocomplete="off"></div>
+    </div>
+  </div>
   <button class="menu-row" id="exportBtn">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
     <span>
@@ -1104,6 +1167,7 @@
   </div>
 </div>
 
+<div class="snackbar" id="snackbar" role="status"><span>Đã lưu</span><button id="snackBtn">Báo cho Bố</button></div>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -1291,6 +1355,11 @@ function closeConfirm(result){
 }
 
 function openSettings(){
+  const r = reportCfg();
+  document.getElementById('rTo').value = r.to;
+  document.getElementById('rMe').value = r.me;
+  document.getElementById('rOwner').value = r.owner;
+  prepareTodayImage();
   document.getElementById('settingsBackdrop').classList.add('open');
   document.getElementById('settingsSheet').classList.add('open');
 }
@@ -1877,13 +1946,26 @@ function fitText(ctx, text, maxW){
   while(t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
   return t + '…';
 }
-function buildShareImage(k){
-  const sum = periodSummary(k);
-  const sections = Object.keys(BOOKS).map(book => ({
+// Ảnh bảng giao dịch dùng chung: quyết toán kỳ và báo cáo ngày gửi bố
+function bookSections(filter){
+  return Object.keys(BOOKS).map(book => ({
     book,
-    list: readBook(book).filter(i => periodOf(i) === k)
+    list: readBook(book).filter(filter)
       .sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id.localeCompare(b.id)),
   })).filter(s => s.list.length);
+}
+function buildShareImage(k){
+  const sum = periodSummary(k);
+  return buildTableImage({
+    title: `QUYẾT TOÁN KỲ ${k + 1}`,
+    subtitle: `${fmtDateShort(sum.from)} – ${fmtDateShort(sum.to)}`,
+    sections: bookSections(i => periodOf(i) === k),
+    footLabel: 'TỔNG CÒN LẠI',
+    footValue: sum.left,
+  });
+}
+function buildTableImage({ title, subtitle, sections, footLabel, footValue, sectionTitle = book => `Sổ ${BOOKS[book].title}`, netLabel = 'Còn lại' }){
+  const count = sections.reduce((n, s) => n + s.list.length, 0);
   const W = 540, pad = 24, rowH = 34, headH = 92, secTop = 58, subH = 82, footH = 96, MAX_H = 15000;
   // Kỳ quá dài thì cắt bớt dòng (ảnh quá cao điện thoại không vẽ được), báo số dòng còn lại
   const fixed = headH + footH + sections.length * (secTop + subH + 16 + rowH);
@@ -1904,14 +1986,14 @@ function buildShareImage(k){
 
   ctx.fillStyle = SHARE_C.bg; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = SHARE_C.band; ctx.fillRect(0, 0, W, headH);
-  font(20, 700); text(`QUYẾT TOÁN KỲ ${k + 1}`, pad, 40, SHARE_C.onBand);
-  font(14); text(`${fmtDateShort(sum.from)} – ${fmtDateShort(sum.to)}`, pad, 66, SHARE_C.onBand);
-  font(13); text(`${sum.count} giao dịch`, W - pad, 40, SHARE_C.onBand, 'right');
+  font(20, 700); text(title, pad, 40, SHARE_C.onBand);
+  font(14); text(subtitle, pad, 66, SHARE_C.onBand);
+  font(13); text(`${count} giao dịch`, W - pad, 40, SHARE_C.onBand, 'right');
 
   let y = headH;
   sections.forEach(s => {
     const tin = sumAmount(s.list.filter(i => !isOut(i))), tout = sumAmount(s.list.filter(isOut));
-    y += 30; font(16, 700); text(`Sổ ${BOOKS[s.book].title}`, pad, y, SHARE_C.ink);
+    y += 30; font(16, 700); text(sectionTitle(s.book), pad, y, SHARE_C.ink);
     y += 22; font(12, 600);
     text('Ngày', pad, y, SHARE_C.muted);
     text(`${BOOKS[s.book].nameLabel} · Nội dung`, pad + 64, y, SHARE_C.muted);
@@ -1939,7 +2021,7 @@ function buildShareImage(k){
     });
     if(s.more){ font(13); text(`… và ${s.more} giao dịch khác (xem file sao lưu CSV)`, pad + 6, y + 22, SHARE_C.muted); y += rowH; }
     line(y + 1);
-    [['Thu', fmtVND(tin), 400], ['Rút', fmtVND(tout), 400], ['Còn lại', fmtVND(tin - tout), 700]].forEach(([k2, v, w], j) => {
+    [['Thu', fmtVND(tin), 400], ['Rút', fmtVND(tout), 400], [netLabel, fmtVND(tin - tout), 700]].forEach(([k2, v, w], j) => {
       const yy = y + 24 + j * 22;
       font(13, w); text(k2, pad + 6, yy, w === 700 ? SHARE_C.ink : SHARE_C.muted);
       font(14, w); text(v, W - pad - 6, yy, SHARE_C.ink, 'right');
@@ -1948,8 +2030,8 @@ function buildShareImage(k){
   });
 
   ctx.fillStyle = SHARE_C.band; ctx.fillRect(pad, y, W - pad * 2, 2);
-  font(13, 600); text('TỔNG CÒN LẠI', pad, y + 36, SHARE_C.muted);
-  font(24, 800); text(fmtVND(sum.left), W - pad, y + 40, SHARE_C.ink, 'right');
+  font(13, 600); text(footLabel, pad, y + 36, SHARE_C.muted);
+  font(24, 800); text(fmtVND(footValue), W - pad, y + 40, SHARE_C.ink, 'right');
   font(12); text(`Tạo từ Sổ thu tiền · ${fmtDateShort(todayISO())}`, pad, y + 74, SHARE_C.muted);
   return new Promise(res => canvas.toBlob(res, 'image/png'));
 }
@@ -2276,6 +2358,129 @@ function startPinFlow(mode){
   showLock(mode);
 }
 
+// ---- Báo cho bố ----
+// Tiền ở cả 2 sổ đều là giữ hộ: sổ Thu tiền thu hộ bố, sổ Lương là lương của ông (bố nhận để đưa ông).
+const REPORT_KEY = 'so-thu-tien-report';
+const REPORT_DEFAULT = { to: 'Bố', me: 'con', owner: 'ông' };
+function reportCfg(){
+  let saved = {};
+  try{ saved = JSON.parse(localStorage.getItem(REPORT_KEY) || '{}') || {}; }catch(e){}
+  const cfg = { ...REPORT_DEFAULT };
+  Object.keys(REPORT_DEFAULT).forEach(k => { if(typeof saved[k] === 'string' && saved[k].trim()) cfg[k] = saved[k].trim(); });
+  return cfg;
+}
+function saveReportCfg(){
+  const cfg = {
+    to: document.getElementById('rTo').value.trim(),
+    me: document.getElementById('rMe').value.trim(),
+    owner: document.getElementById('rOwner').value.trim(),
+  };
+  try{ localStorage.setItem(REPORT_KEY, JSON.stringify(cfg)); }catch(e){}
+  refreshReportLabels();
+}
+function refreshReportLabels(){
+  const r = reportCfg();
+  document.getElementById('reportBtn').textContent = `Báo cho ${r.to}`;
+  document.getElementById('reportTodayTitle').textContent = `Báo tổng hôm nay cho ${r.to}`;
+}
+// Số tiền đang giữ của 1 sổ trong kỳ hiện tại (chưa quyết toán)
+const heldOf = book => balanceOf(readBook(book).filter(i => periodOf(i) === settlements.length));
+function reportMessage(item, book){
+  const r = reportCfg(), to = r.to.toLowerCase();
+  const amount = fmtVND(item.amount), date = fmtDateShort(item.date);
+  const note = item.note ? ` · ${item.note}` : '';
+  const held = fmtVND(heldOf(book));
+  if(book === 'luong'){
+    const head = isOut(item)
+      ? `${r.to} ơi, ${r.me} đã rút ${amount} tiền lương của ${r.owner} (${item.name}, ${date})${note}.`
+      : `${r.to} ơi, lương của ${r.owner} về ${amount} (${item.name}, ${date})${note}.`;
+    return `${head}\nLương của ${r.owner} ${r.me} đang giữ: ${held}.`;
+  }
+  const head = isOut(item)
+    ? `${r.to} ơi, ${r.me} đã rút ${amount} (${item.name}, ${date})${note}.`
+    : `${r.to} ơi, ${r.me} vừa nhận ${amount} từ ${item.name} (${date})${note}.`;
+  return `${head}\nTổng ${r.me} đang giữ hộ ${to}: ${held}.`;
+}
+async function shareText(text, title){
+  if(navigator.share){
+    try{
+      await navigator.share({ title, text });
+      return;
+    }catch(e){
+      if(e && e.name === 'AbortError') return;
+    }
+  }
+  showToast(await copyText(text) ? 'Đã sao chép, dán vào Zalo/Messenger để gửi' : 'Không chia sẻ được, thử lại nhé');
+}
+function reportItem(id, book){
+  const item = readBook(book).find(i => i.id === id);
+  if(item) shareText(reportMessage(item, book), `Báo cho ${reportCfg().to}`);
+}
+
+// Báo tổng hôm nay: ảnh bảng các khoản trong ngày của cả 2 sổ + tóm tắt chữ
+function todayReport(){
+  const r = reportCfg(), today = todayISO();
+  const sections = bookSections(i => i.date === today);
+  const heldThu = heldOf('thu'), heldLuong = heldOf('luong');
+  const lines = [`${r.to} ơi, hôm nay ${fmtDateShort(today)} ${r.me} báo:`];
+  sections.forEach(s => {
+    lines.push('', s.book === 'luong' ? `Lương của ${r.owner}:` : 'Tiền thu hộ:');
+    s.list.forEach(i => lines.push(`• ${isOut(i) ? 'Rút' : 'Nhận'} ${fmtVND(i.amount)} · ${i.name}${i.note ? ' · ' + i.note : ''}`));
+  });
+  lines.push('', `Đang giữ hộ ${r.to.toLowerCase()}: ${fmtVND(heldThu)}`, `Lương của ${r.owner} đang giữ: ${fmtVND(heldLuong)}`);
+  return {
+    sections,
+    text: lines.join('\n'),
+    image: () => buildTableImage({
+      title: `BÁO CÁO NGÀY ${fmtDateShort(today)}`,
+      subtitle: `Gửi ${r.to}`,
+      sections,
+      sectionTitle: book => book === 'luong' ? `Lương của ${r.owner}` : `Tiền thu hộ ${r.to.toLowerCase()}`,
+      netLabel: 'Chênh lệch hôm nay',
+      footLabel: 'ĐANG GIỮ HỘ (CẢ 2 SỔ)',
+      footValue: heldThu + heldLuong,
+    }),
+  };
+}
+// Tạo sẵn ảnh lúc mở Quản lý sổ để bấm gửi là mở được bảng chia sẻ ngay
+let todayImage = null;
+function prepareTodayImage(){
+  const rep = todayReport();
+  todayImage = rep.sections.length ? rep.image().catch(() => null) : Promise.resolve(null);
+}
+async function shareTodayReport(){
+  const rep = todayReport();
+  if(!rep.sections.length){ showToast('Hôm nay chưa có giao dịch nào'); return; }
+  const title = `Báo cáo ngày ${fmtDateShort(todayISO())}`;
+  const blob = await (todayImage || rep.image().catch(() => null));
+  if(blob){
+    const file = new File([blob], `bao-cao-${todayISO()}.png`, { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try{
+        await navigator.share({ files: [file], title, text: rep.text });
+        return;
+      }catch(e){
+        if(e && e.name === 'AbortError') return;
+      }
+    }
+    downloadBlob(blob, file.name);
+    await copyText(rep.text);
+    showToast('Đã tải ảnh báo cáo và sao chép tóm tắt');
+    return;
+  }
+  shareText(rep.text, title);
+}
+
+// Thanh "Đã lưu · Báo cho Bố" hiện vài giây sau khi lưu
+function showSaved(id, book){
+  const bar = document.getElementById('snackbar');
+  document.getElementById('snackBtn').textContent = `Báo cho ${reportCfg().to}`;
+  document.getElementById('snackBtn').onclick = () => { bar.classList.remove('show'); reportItem(id, book); };
+  bar.classList.add('show');
+  clearTimeout(showSaved._t);
+  showSaved._t = setTimeout(() => bar.classList.remove('show'), 6000);
+}
+
 function openSettle(){
   const { thu, luong } = unsettledItems();
   const all = [...thu, ...luong];
@@ -2439,6 +2644,7 @@ function openSheet(edit, type = 'in'){
   }
   // Xóa nằm trong form sửa thay vì nút ✕ ở từng dòng, tránh bấm nhầm
   document.getElementById('deleteBtn').style.display = edit ? '' : 'none';
+  document.getElementById('reportBtn').style.display = edit ? '' : 'none';
   setFormType(type);
   document.getElementById('backdrop').classList.add('open');
   document.getElementById('sheet').classList.add('open');
@@ -2479,10 +2685,11 @@ async function handleSave(){
       name, amount, date, note, type
     });
   }
+  const savedId = editingId || items[items.length - 1].id;
   await saveItems();
   closeSheet();
   render();
-  showToast('Đã lưu');
+  showSaved(savedId, currentBook);
 }
 
 async function handleDelete(id){
@@ -2697,6 +2904,10 @@ document.getElementById('pastBannerBtn').addEventListener('click', () => setView
 document.getElementById('pastShareBtn').addEventListener('click', () => shareSettlement(viewPeriod));
 document.getElementById('resultCloseBtn').addEventListener('click', closeResult);
 document.getElementById('statsBtn').addEventListener('click', openStats);
+document.getElementById('reportBtn').addEventListener('click', () => { if(editingId) reportItem(editingId, currentBook); });
+document.getElementById('reportTodayBtn').addEventListener('click', shareTodayReport);
+['rTo', 'rMe', 'rOwner'].forEach(id => document.getElementById(id).addEventListener('input', saveReportCfg));
+refreshReportLabels();
 document.querySelectorAll('#keypad [data-key]').forEach(btn => btn.addEventListener('click', () => pinPress(btn.dataset.key)));
 document.addEventListener('keydown', (e) => {
   if(!lockMode) return;
