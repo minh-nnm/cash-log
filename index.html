@@ -2376,6 +2376,7 @@ function saveReportCfg(){
     owner: document.getElementById('rOwner').value.trim(),
   };
   try{ localStorage.setItem(REPORT_KEY, JSON.stringify(cfg)); }catch(e){}
+  receiptCache.clear();
   refreshReportLabels();
 }
 function refreshReportLabels(){
@@ -2412,9 +2413,73 @@ async function shareText(text, title){
   }
   showToast(await copyText(text) ? 'Đã sao chép, dán vào Zalo/Messenger để gửi' : 'Không chia sẻ được, thử lại nhé');
 }
-function reportItem(id, book){
+// Ảnh biên nhận cho 1 giao dịch, gửi kèm tin nhắn báo cho bố
+function buildReceiptImage(item, book){
+  const r = reportCfg(), out = isOut(item), luong = book === 'luong';
+  const W = 540, pad = 24, rowH = 40;
+  const title = luong ? (out ? `ĐÃ RÚT LƯƠNG CỦA ${r.owner.toUpperCase()}` : `LƯƠNG CỦA ${r.owner.toUpperCase()} ĐÃ VỀ`)
+    : (out ? 'ĐÃ RÚT TIỀN' : 'ĐÃ NHẬN TIỀN');
+  const rows = [
+    [luong ? BOOKS.luong.nameLabel : (out ? 'Rút cho' : 'Người chuyển'), item.name || ''],
+    ['Ngày', fmtDateShort(item.date)],
+    ...(item.note ? [['Nội dung', item.note]] : []),
+  ];
+  const H = 92 + 110 + rows.length * rowH + 120;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * 2; canvas.height = H * 2;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  const font = (size, weight = 400) => { ctx.font = `${weight} ${size}px ${SHARE_FONT}`; };
+  const text = (t, x, y, color, align = 'left') => { ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(t, x, y); };
+  ctx.fillStyle = SHARE_C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = SHARE_C.band; ctx.fillRect(0, 0, W, 92);
+  font(20, 700); text(fitText(ctx, title, W - pad * 2), pad, 40, SHARE_C.onBand);
+  font(14); text(`Gửi ${r.to}`, pad, 66, SHARE_C.onBand);
+  font(34, 800); text(`${out ? '−' : '+'}${fmtVND(item.amount)}`, W / 2, 92 + 70, out ? SHARE_C.out : SHARE_C.in, 'center');
+  let y = 92 + 110;
+  rows.forEach(([k, v], j) => {
+    if(j % 2 === 0){ ctx.fillStyle = SHARE_C.zebra; ctx.fillRect(pad, y, W - pad * 2, rowH); }
+    font(14); text(k, pad + 10, y + 26, SHARE_C.muted);
+    font(15, 600); text(fitText(ctx, v, W - pad * 2 - 150), W - pad - 10, y + 26, SHARE_C.ink, 'right');
+    y += rowH;
+  });
+  ctx.fillStyle = SHARE_C.band; ctx.fillRect(pad, y + 16, W - pad * 2, 2);
+  font(13, 600); text(luong ? `LƯƠNG CỦA ${r.owner.toUpperCase()} ĐANG GIỮ` : `ĐANG GIỮ HỘ ${r.to.toUpperCase()}`, pad, y + 54, SHARE_C.muted);
+  font(22, 800); text(fmtVND(heldOf(book)), W - pad, y + 56, SHARE_C.ink, 'right');
+  font(12); text(`Tạo từ Sổ thu tiền · ${fmtDateShort(todayISO())}`, pad, y + 92, SHARE_C.muted);
+  return new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+const receiptCache = new Map();
+function prepareReceipt(id, book){
+  const key = `${book}:${id}`;
+  if(!receiptCache.has(key)){
+    const item = readBook(book).find(i => i.id === id);
+    receiptCache.set(key, item ? buildReceiptImage(item, book).catch(() => null) : Promise.resolve(null));
+  }
+  return receiptCache.get(key);
+}
+// Gửi ảnh biên nhận kèm tin nhắn; máy không gửi được ảnh thì tải ảnh về và sao chép tin nhắn
+async function reportItem(id, book){
   const item = readBook(book).find(i => i.id === id);
-  if(item) shareText(reportMessage(item, book), `Báo cho ${reportCfg().to}`);
+  if(!item) return;
+  const text = reportMessage(item, book), title = `Báo cho ${reportCfg().to}`;
+  const blob = await prepareReceipt(id, book);
+  if(blob){
+    const file = new File([blob], `bien-nhan-${item.date || todayISO()}.png`, { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try{
+        await navigator.share({ files: [file], title, text });
+        return;
+      }catch(e){
+        if(e && e.name === 'AbortError') return;
+      }
+    }
+    downloadBlob(blob, file.name);
+    await copyText(text);
+    showToast('Đã tải ảnh biên nhận và sao chép tin nhắn');
+    return;
+  }
+  shareText(text, title);
 }
 
 // Báo tổng hôm nay: ảnh bảng các khoản trong ngày của cả 2 sổ + tóm tắt chữ
@@ -2476,6 +2541,7 @@ function showSaved(id, book){
   const bar = document.getElementById('snackbar');
   document.getElementById('snackBtn').textContent = `Báo cho ${reportCfg().to}`;
   document.getElementById('snackBtn').onclick = () => { bar.classList.remove('show'); reportItem(id, book); };
+  prepareReceipt(id, book);
   bar.classList.add('show');
   clearTimeout(showSaved._t);
   showSaved._t = setTimeout(() => bar.classList.remove('show'), 6000);
@@ -2600,6 +2666,7 @@ async function loadItems(){
 }
 async function saveItems(){
   shareImageCache.clear();
+  receiptCache.clear();
   const ok = storage.set(items);
   if(!ok) showToast('Không lưu được, thử lại nhé');
 }
@@ -2645,6 +2712,7 @@ function openSheet(edit, type = 'in'){
   // Xóa nằm trong form sửa thay vì nút ✕ ở từng dòng, tránh bấm nhầm
   document.getElementById('deleteBtn').style.display = edit ? '' : 'none';
   document.getElementById('reportBtn').style.display = edit ? '' : 'none';
+  if(edit) prepareReceipt(edit.id, currentBook);
   setFormType(type);
   document.getElementById('backdrop').classList.add('open');
   document.getElementById('sheet').classList.add('open');
